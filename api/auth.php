@@ -30,7 +30,16 @@ header('Content-Type: application/json');
 ob_end_clean();
 
 $method = $_SERVER['REQUEST_METHOD'];
-$action = isset($_GET['action']) ? sanitize($_GET['action']) : '';
+$action = isset($_GET['action']) ? sanitize($_GET['action']) : (isset($_POST['action']) ? sanitize($_POST['action']) : '');
+
+file_put_contents(__DIR__ . '/debug.txt', print_r([
+    'time' => date('Y-m-d H:i:s'),
+    'method' => $method,
+    'get' => $_GET,
+    'post' => $_POST,
+    'input' => file_get_contents('php://input'),
+    'request_uri' => $_SERVER['REQUEST_URI']
+], true) . "\n", FILE_APPEND);
 
 switch ($action) {
     case 'register':

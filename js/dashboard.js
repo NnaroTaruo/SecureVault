@@ -1,33 +1,193 @@
-// Master Key Modal Logic
-let activeMasterKeyAction = null;
-let activeMasterKeyAccountId = null;
-let activeMasterKeyButton = null;
+// PWA Dashboard Logic
+const colors = {
+    success: 'bg-green-900/40 border-green-500 text-green-300',
+    error:   'bg-red-900/40 border-red-500 text-red-300',
+    warning: 'bg-yellow-900/40 border-yellow-500 text-yellow-300',
+    info:    'bg-blue-900/40 border-blue-500 text-blue-300'
+};
 
-function promptMasterKey(action, accountId, button) {
-    activeMasterKeyAction = action;
-    activeMasterKeyAccountId = accountId;
-    activeMasterKeyButton = button;
+function showAlert(message, type = 'info') {
+    const alertBox = document.getElementById('alertArea');
+    if (!alertBox) return;
+
+    const el = document.createElement('div');
+    el.className = `p-3.5 rounded-xl border-l-4 text-xs font-semibold
+                      flex items-center gap-2 ${colors[type] || colors.info}`;
+    el.style.cssText += 'animation: slideDown .25s ease-out;';
+
+    const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
+    el.innerHTML = `<span class="flex-shrink-0">${icons[type] || '🔔'}</span>
+                    <span class="flex-1">${message}</span>
+                    <button onclick="this.parentElement.remove()" class="flex-shrink-0 opacity-60 hover:opacity-100 text-lg leading-none">&times;</button>`;
+
+    alertBox.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+// ── Search Logic (Fast & Robust) ──────────────────────────
+function searchVault(query) {
+    const q = query.toLowerCase().trim();
+    const cards = document.querySelectorAll('.card-anim');
     
-    document.getElementById('promptMasterKey').value = '';
-    
-    const title = document.getElementById('masterKeyModalTitle');
-    const message = document.getElementById('masterKeyModalMessage');
-    const submitBtn = document.getElementById('masterKeySubmitBtn');
-    
-    if (action === 'reveal') {
-        title.innerHTML = '<span class="text-primary">🔓</span> View Password';
-        message.textContent = 'Enter your Master Key to decrypt this specific vault shard.';
-        submitBtn.textContent = 'Decrypt';
-        submitBtn.className = 'flex-1 px-4 py-2 bg-primary hover:bg-primary-dark text-dark-bg font-bold rounded-lg transition-all';
-    } else if (action === 'delete') {
-        title.innerHTML = '<span class="text-red-500">⚠️</span> Delete Account';
-        message.textContent = 'Enter your Master Key to confirm permanent deletion.';
-        submitBtn.textContent = 'Delete Forever';
-        submitBtn.className = 'flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-all';
+    cards.forEach(card => {
+        const service = card.dataset.service || '';
+        // Look for the username inside the card
+        const usernameEl = card.querySelector('.account-username');
+        const username = usernameEl ? usernameEl.textContent.toLowerCase() : '';
+        
+        if (service.includes(q) || username.includes(q)) {
+            card.classList.remove('hidden');
+        } else {
+            card.classList.add('hidden');
+        }
+    });
+
+    // Check if we should show an empty state if all cards are hidden
+    const visibleCards = document.querySelectorAll('.card-anim:not(.hidden)').length;
+    const emptyMsg = document.getElementById('searchEmptyState');
+    if (emptyMsg) {
+        emptyMsg.classList.toggle('hidden', visibleCards > 0 || q === '');
     }
-    
+}
+
+function showSearchOverlay() {
+    const overlay = document.getElementById('searchOverlay');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+        setTimeout(() => {
+            const input = document.getElementById('searchInput');
+            if (input) input.focus();
+        }, 100);
+    }
+}
+
+function hideSearchOverlay() {
+    const overlay = document.getElementById('searchOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        // Optional: clear search when closing
+        // searchVault(''); 
+    }
+}
+
+// ── Add / Edit Account ────────────────────────────────────
+function openAddAccountModal() {
+    document.getElementById('accountId').value = '';
+    document.getElementById('accountForm').reset();
+    document.getElementById('accountPassword').value = ''; 
+    document.getElementById('modalTitle').textContent = 'Add New Account';
+    openModal('accountModal');
+}
+
+function openSettingsModal() {
+    document.getElementById('settingsForm').reset();
+    openModal('settingsModal');
+}
+
+function editAccount(accountId) {
+    promptMasterKey('edit', accountId, null);
+}
+
+function executeEditFetch(accountId, masterPassword) {
+    fetch(`api/accounts.php?action=get_account&id=${accountId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'get_account', master_password: masterPassword })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const acc = data.data.account;
+            document.getElementById('accountId').value        = acc.id;
+            document.getElementById('serviceName').value      = acc.service_name;
+            document.getElementById('category').value         = acc.category_id || 0;
+            document.getElementById('accountUsername').value  = acc.username;
+            document.getElementById('accountPassword').value  = acc.password;
+            document.getElementById('website').value          = acc.website_url;
+            document.getElementById('notes').value            = acc.notes || '';
+            document.getElementById('masterPassword').value   = masterPassword; 
+            document.getElementById('modalTitle').textContent = 'Edit Account';
+
+            openModal('accountModal');
+        } else {
+            showAlert(data.message || 'Failed to fetch account details', 'error');
+        }
+    })
+    .catch(() => showAlert('Failed to connect to vault', 'error'));
+}
+
+function handleAccountSubmit(event) {
+    event.preventDefault();
+
+    const accountId    = document.getElementById('accountId').value;
+    const serviceName  = document.getElementById('serviceName').value;
+    const categoryId   = document.getElementById('category').value;
+    const username     = document.getElementById('accountUsername').value;
+    const password     = document.getElementById('accountPassword').value;
+    const website      = document.getElementById('website').value;
+    const notes        = document.getElementById('notes').value;
+    const masterPass   = document.getElementById('masterPassword').value;
+
+    if (!masterPass) { showAlert('Master Key is required', 'error'); return; }
+
+    const isEdit   = !!accountId;
+    const endpoint = isEdit ? 'api/accounts.php?action=update' : 'api/accounts.php?action=add_account';
+
+    const body = new URLSearchParams({
+        service_name:  serviceName,
+        category_id:   categoryId,
+        username:      username,
+        password:      password,
+        website_url:   website,
+        notes:         notes,
+        master_password: masterPass,
+    });
+    if (isEdit) body.append('id', accountId);
+
+    fetch(endpoint, { method: 'POST', body })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(isEdit ? 'Account updated!' : 'Account added!', 'success');
+                closeModal('accountModal');
+                setTimeout(() => location.reload(), 900);
+            } else {
+                showAlert(data.message || 'Failed to save account', 'error');
+            }
+        })
+        .catch(() => showAlert('Network error', 'error'));
+}
+
+// ── Master Key Prompt ─────────────────────────────────────
+let activeMasterKeyAction  = null;
+let activeMasterKeyAccountId = null;
+let activeMasterKeyButton  = null;
+
+function promptMasterKey(action, accountId, btn) {
+    activeMasterKeyAction  = action;
+    activeMasterKeyAccountId = accountId;
+    activeMasterKeyButton  = btn;
+
+    const modalMsg = document.getElementById('masterKeyModalMessage');
+    const submitBtn = document.getElementById('masterKeySubmitBtn');
+    document.getElementById('promptMasterKey').value = '';
+
+    if (action === 'reveal') {
+        modalMsg.textContent = 'Enter Master Key to decrypt password.';
+        submitBtn.textContent = 'Decrypt';
+        submitBtn.className    = 'flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-dark-bg font-bold rounded-xl transition-all';
+    } else if (action === 'edit') {
+        modalMsg.textContent = 'Enter Master Key to unlock account for editing.';
+        submitBtn.textContent = 'Unlock & Edit';
+        submitBtn.className    = 'flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-dark-bg font-bold rounded-xl transition-all';
+    } else if (action === 'delete') {
+        modalMsg.textContent = 'Are you sure? Enter Master Key to confirm deletion.';
+        submitBtn.textContent = 'Confirm Delete';
+        submitBtn.className    = 'flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all';
+    }
+
     openModal('masterKeyModal');
-    setTimeout(() => document.getElementById('promptMasterKey').focus(), 100);
+    setTimeout(() => document.getElementById('promptMasterKey').focus(), 120);
 }
 
 function handleMasterKeySubmit(e) {
@@ -39,384 +199,201 @@ function handleMasterKeySubmit(e) {
 
     if (activeMasterKeyAction === 'reveal') {
         executeRevealPassword(activeMasterKeyAccountId, activeMasterKeyButton, masterPassword);
+    } else if (activeMasterKeyAction === 'edit') {
+        executeEditFetch(activeMasterKeyAccountId, masterPassword);
     } else if (activeMasterKeyAction === 'delete') {
         executeDeleteAccount(activeMasterKeyAccountId, masterPassword);
     }
 }
 
-// Toggle Sidebar
-function toggleSidebar() {
-  const sidebar = document.getElementById("sidebar");
-  const backdrop = document.getElementById("sidebarBackdrop");
+// ── Password Reveal + Auto-hide ───────────────────────────
+const revealTimers = {};
 
-  sidebar.classList.toggle("active");
-  backdrop.classList.toggle("hidden");
-}
+function executeRevealPassword(accountId, btn, masterPassword) {
+    const displayEl = document.querySelector(`.password-display-${accountId}`);
+    if (!displayEl) return;
 
-function closeSidebar() {
-  const sidebar = document.getElementById("sidebar");
-  const backdrop = document.getElementById("sidebarBackdrop");
+    if (!displayEl.classList.contains('password-masked')) {
+        hidePasswordElement(accountId, displayEl);
+        return;
+    }
 
-  sidebar.classList.remove("active");
-  backdrop.classList.add("hidden");
-}
-
-// Modal Functions
-function openModal(modalId) {
-  document.getElementById(modalId).classList.remove("hidden");
-  document.body.style.overflow = "hidden";
-}
-
-function closeModal(modalId) {
-  document.getElementById(modalId).classList.add("hidden");
-  document.body.style.overflow = "auto";
-}
-
-function openAddAccountModal() {
-  document.getElementById("accountId").value = "";
-  document.getElementById("accountForm").reset();
-  document.getElementById("modalTitle").textContent = "Add New Account";
-  openModal("accountModal");
-}
-
-function openSettingsModal() {
-  document.getElementById("settingsForm").reset();
-  openModal("settingsModal");
-}
-
-// Alert System
-function showAlert(message, type = "info") {
-  const alertBox = document.getElementById("alertBox");
-
-  const colors = {
-    success: "bg-green-900/20 border-green-700 text-green-400",
-    error: "bg-red-900/20 border-red-700 text-red-400",
-    warning: "bg-yellow-900/20 border-yellow-700 text-yellow-400",
-    info: "bg-blue-900/20 border-blue-700 text-blue-400",
-  };
-
-  const alert = document.createElement("div");
-  alert.className = `border rounded-lg p-4 mb-3 ${colors[type]} animate-fade-in`;
-  alert.innerHTML = `
-        <div class="flex items-center gap-3">
-            <span>${type === "success" ? "✓" : type === "error" ? "✕" : type === "warning" ? "!" : "ℹ"}</span>
-            <span class="text-sm">${message}</span>
-            <button onclick="this.parentElement.parentElement.remove()" class="ml-auto text-lg hover:opacity-70">×</button>
-        </div>
-    `;
-
-  alertBox.appendChild(alert);
-  setTimeout(() => alert.remove(), 5000);
-}
-
-// Add/Edit Account
-function openAddAccountModal() {
-  document.getElementById("accountId").value = "";
-  document.getElementById("accountForm").reset();
-  document.getElementById("modalTitle").textContent = "Add New Account";
-  closeSidebar();
-  openModal("accountModal");
-}
-
-function editAccount(accountId) {
-  const card = document.querySelector(`[data-account-id="${accountId}"]`);
-  if (!card) {
-    showAlert("Account not found", "error");
-    return;
-  }
-
-  const serviceName = card.querySelector("h3").textContent.trim();
-  const usernameDiv = card.querySelector("div[onclick*='copyUserClipboard']");
-  const username = usernameDiv ? usernameDiv.querySelector("span:first-child").textContent.trim() : "";
-  const website = card.querySelector("a")?.href || "";
-  const notesText = card.querySelector("p.line-clamp-2")?.textContent || "";
-
-  document.getElementById("accountId").value = accountId;
-  document.getElementById("serviceName").value = serviceName;
-  document.getElementById("accountUsername").value = username;
-  document.getElementById("website").value = website;
-  document.getElementById("notes").value = notesText;
-  document.getElementById("modalTitle").textContent = "Edit Account";
-
-  closeSidebar();
-  openModal("accountModal");
-}
-
-function handleAccountSubmit(event) {
-  event.preventDefault();
-
-  const accountId = document.getElementById("accountId").value;
-  const serviceName = document.getElementById("serviceName").value;
-  const categoryId = document.getElementById("category").value;
-  const username = document.getElementById("accountUsername").value;
-  const password = document.getElementById("accountPassword").value;
-  const website = document.getElementById("website").value;
-  const notes = document.getElementById("notes").value;
-  const masterPassword = document.getElementById("masterPassword").value;
-
-  if (!masterPassword) {
-    showAlert("Master password is required", "error");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("service_name", serviceName);
-  formData.append("username", username);
-  formData.append("password", password);
-  formData.append("category_id", categoryId);
-  formData.append("website_url", website);
-  formData.append("notes", notes);
-  formData.append("master_password", masterPassword);
-
-  let action = "add_account";
-  if (accountId) {
-    formData.append("id", accountId);
-    action = "update_account";
-  }
-
-  fetch(`api/accounts.php?action=${action}`, {
-    method: "POST",
-    body: formData,
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.success) {
-        showAlert(data.message, "success");
-        closeModal("accountModal");
-        setTimeout(() => location.reload(), 1200);
-      } else {
-        showAlert(data.message, "error");
-      }
+    fetch('api/accounts.php?action=reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:   new URLSearchParams({ action: 'reveal', id: accountId, master_password: masterPassword }),
     })
-    .catch((error) => {
-      showAlert("Failed to save account: " + error, "error");
-    });
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            displayEl.textContent = data.data.password;
+            displayEl.classList.remove('password-masked', 'pw-dots');
+            displayEl.style.color = '#00E676';
+            displayEl.style.letterSpacing = 'normal';
+            displayEl.style.fontSize      = '13px';
+
+            if (revealTimers[accountId]) clearTimeout(revealTimers[accountId]);
+
+            revealTimers[accountId] = setTimeout(() => {
+                hidePasswordElement(accountId, displayEl);
+            }, 30000);
+            
+            showAlert('Password revealed (Auto-hiding in 30s)', 'success');
+        } else {
+            showAlert(data.message || 'Wrong master key', 'error');
+        }
+    })
+    .catch(() => showAlert('Failed to decrypt password', 'error'));
 }
 
-// Delete Account
+function hidePasswordElement(accountId, displayEl) {
+    if (!displayEl) displayEl = document.querySelector(`.password-display-${accountId}`);
+    if (!displayEl) return;
+    
+    displayEl.textContent = '••••••••••••';
+    displayEl.classList.add('password-masked', 'pw-dots');
+    displayEl.style.color = '';
+    displayEl.style.letterSpacing = '';
+    displayEl.style.fontSize = '';
+    
+    if (revealTimers[accountId]) {
+        clearTimeout(revealTimers[accountId]);
+        delete revealTimers[accountId];
+    }
+}
+
+function togglePasswordVisibility(btn) {
+    const card      = btn.closest('[data-account-id]');
+    const accountId = card?.dataset.accountId;
+    if (!accountId) return;
+    promptMasterKey('reveal', accountId, btn);
+}
+
+// ── Delete Account ────────────────────────────────────────
 function deleteAccount(accountId) {
     promptMasterKey('delete', accountId, null);
 }
 
-function executeDeleteAccount(accountId, masterPasswordPrompt) {
-  const formData = new FormData();
-  formData.append("id", accountId);
-  formData.append("master_password", masterPasswordPrompt);
-
-  fetch(`api/accounts.php?action=delete_account`, {
-    method: "POST",
-    body: formData,
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.success) {
-        showAlert(data.message, "success");
-        setTimeout(() => location.reload(), 1200);
-      } else {
-        showAlert(data.message, "error");
-      }
+function executeDeleteAccount(accountId, masterPassword) {
+    fetch('api/accounts.php?action=delete_account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:   new URLSearchParams({ action: 'delete_account', id: accountId, master_password: masterPassword }),
     })
-    .catch((error) => {
-      showAlert("Failed to delete account: " + error, "error");
-    });
-}
-
-// Password Visibility
-function togglePasswordVisibility(button) {
-  const passwordDisplay = button.closest(".flex");
-  if (!passwordDisplay) return;
-
-  const passwordValue = passwordDisplay.querySelector("span");
-  if (!passwordValue) {
-    showAlert("Error: Could not find password element", "error");
-    return;
-  }
-
-  if (button.textContent.startsWith("Hide")) {
-    passwordValue.textContent = "••••••••••••••••";
-    passwordDisplay.classList.add("password-masked");
-    button.textContent = "Show";
-    if (button.countdownInterval) clearInterval(button.countdownInterval);
-    if (button.hideTimeout) clearTimeout(button.hideTimeout);
-    return;
-  }
-
-  const accountCard = button.closest("[data-account-id]");
-  if (!accountCard) {
-    showAlert("Error: Could not find account", "error");
-    return;
-  }
-
-  const accountId = accountCard.getAttribute("data-account-id");
-  promptMasterKey('reveal', accountId, button);
-}
-
-function executeRevealPassword(accountId, button, masterPasswordPrompt) {
-  const passwordDisplay = button.closest(".flex");
-  const passwordValue = passwordDisplay.querySelector("span");
-
-  const formData = new FormData();
-  formData.append('master_password', masterPasswordPrompt);
-
-  fetch(
-    `api/accounts.php?action=get_account&id=${accountId}`, {
-      method: "POST",
-      body: formData
-    }
-  )
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.success) {
-        const password = data.data.account.password;
-        if (!password) {
-          showAlert("Password is empty", "error");
-          return;
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Account deleted', 'success');
+            const card = document.querySelector(`[data-account-id="${accountId}"]`);
+            if (card) {
+                card.style.transition = 'opacity .3s, transform .3s';
+                card.style.opacity    = '0';
+                card.style.transform  = 'scale(0.95)';
+                setTimeout(() => { card.remove(); updateVaultCount(); }, 320);
+            }
+        } else {
+            showAlert(data.message || 'Wrong master key', 'error');
         }
-
-        passwordValue.textContent = password;
-        passwordDisplay.classList.remove("password-masked");
-
-        let secondsLeft = 30;
-        button.textContent = `Hide (${secondsLeft}s)`;
-
-        if (button.countdownInterval) clearInterval(button.countdownInterval);
-        if (button.hideTimeout) clearTimeout(button.hideTimeout);
-
-        button.countdownInterval = setInterval(() => {
-          secondsLeft--;
-          if (secondsLeft > 0) {
-            button.textContent = `Hide (${secondsLeft}s)`;
-          } else {
-            clearInterval(button.countdownInterval);
-          }
-        }, 1000);
-
-        button.hideTimeout = setTimeout(() => {
-          passwordValue.textContent = "••••••••••••••••";
-          passwordDisplay.classList.add("password-masked");
-          button.textContent = "Show";
-          clearInterval(button.countdownInterval);
-        }, 30000);
-      } else {
-        showAlert(data.message || "Failed to retrieve password", "error");
-      }
     })
-    .catch((error) => {
-      showAlert("Error: " + error, "error");
-    });
+    .catch(() => showAlert('Failed to delete account', 'error'));
 }
 
-// Search/Filter
-function filterAccounts() {
-  const searchTerm = document.getElementById("searchInput").value.toLowerCase();
-  const cards = document.querySelectorAll("[data-account-id]");
-
-  cards.forEach((card) => {
-    const service = card.getAttribute("data-service");
-    const matches = service.includes(searchTerm);
-    card.style.display = matches ? "" : "none";
-  });
+function updateVaultCount() {
+    const remaining = document.querySelectorAll('#accountsList [data-account-id]').length;
+    if (remaining === 0) location.reload();
 }
 
-// Settings
-function handleSettingsSubmit(event) {
-  event.preventDefault();
-
-  const oldPassword = document.getElementById("oldPassword").value;
-  const newPassword = document.getElementById("newPassword").value;
-  const confirmNewPassword =
-    document.getElementById("confirmNewPassword").value;
-
-  if (newPassword !== confirmNewPassword) {
-    showAlert("New passwords do not match", "error");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("old_password", oldPassword);
-  formData.append("new_password", newPassword);
-
-  fetch("api/auth.php?action=update_master_password", {
-    method: "POST",
-    body: formData,
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      if (data.success) {
-        showAlert(data.message, "success");
-        closeModal("settingsModal");
-      } else {
-        showAlert(data.message, "error");
-      }
-    })
-    .catch((error) => {
-      showAlert("Failed to update password: " + error, "error");
-    });
+// ── Miscellaneous ─────────────────────────────────────────
+function openModal(id) {
+    document.getElementById(id).classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
 }
 
-// Logout
-function logout() {
-  openModal("logoutModal");
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+    document.body.style.overflow = 'auto';
 }
 
 function executeLogout() {
-  fetch("api/auth.php?action=logout", { method: "POST" })
-    .then(() => (window.location.href = "index.php"))
-    .catch(() => (window.location.href = "index.php"));
+    fetch('api/auth.php?action=logout').then(() => window.location.href = 'index.php');
 }
 
-// Close modals on Escape key
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    const modal = document.querySelector(".fixed:not(.hidden)");
-    if (modal) {
-      const modalId = modal.id;
-      if (modalId) closeModal(modalId);
-    }
-  }
-});
+function logout() {
+    openModal('logoutModal');
+}
 
-// Add animation styles
-const style = document.createElement("style");
-style.textContent = `
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in {
-        animation: fadeIn 0.3s ease-out;
-    }
-    .line-clamp-2 {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-`;
-document.head.appendChild(style);
+function switchTab(tab) {
+    if (tab === 'vault') window.location.href = 'dashboard.php';
+    else if (tab === 'search') showSearchOverlay();
+    else if (tab === 'add') openAddAccountModal();
+    else if (tab === 'settings') openSettingsModal();
+}
 
-// Copy Username to Clipboard
 function copyUserClipboard(text) {
-    // Fallback for non-HTTPS connections (like testing on local Network IPs)
     if (!navigator.clipboard) {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed"; // Prevent scrolling to bottom
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand("copy");
-            showAlert("Username copied to clipboard", "success");
-        } catch (err) {
-            showAlert("Failed to copy username on this device", "error");
-        }
-        document.body.removeChild(textarea);
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showAlert('Username copied!', 'success'); }
+        catch { showAlert('Copy failed', 'error'); }
+        document.body.removeChild(ta);
         return;
     }
-    
-    navigator.clipboard.writeText(text).then(() => {
-        showAlert("Username copied to clipboard", "success");
-    }).catch(err => {
-        showAlert("Failed to copy username", "error");
-    });
+    navigator.clipboard.writeText(text)
+        .then(() => showAlert('Username copied!', 'success'))
+        .catch(() => showAlert('Copy failed', 'error'));
 }
+
+function handleSettingsSubmit(event) {
+    event.preventDefault();
+    const oldKey = document.getElementById('oldPassword').value;
+    const newKey = document.getElementById('newPassword').value;
+    const confirmKey = document.getElementById('confirmNewPassword').value;
+    if (newKey !== confirmKey) { showAlert('New keys do not match', 'error'); return; }
+
+    fetch('api/auth.php?action=update_master_password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'update_master_password', old_password: oldKey, new_password: newKey })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Master Key updated!', 'success');
+            closeModal('settingsModal');
+        } else {
+            showAlert(data.message || 'Update failed', 'error');
+        }
+    })
+    .catch(() => showAlert('Network error', 'error'));
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        const overlay = document.getElementById('searchOverlay');
+        if (overlay && !overlay.classList.contains('hidden')) { hideSearchOverlay(); return; }
+
+        ['masterKeyModal','accountModal','settingsModal','logoutModal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.classList.contains('hidden')) closeModal(id);
+        });
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        showSearchOverlay();
+    }
+});
+
+// ── Dynamic CSS ───────────────────────────────────────────
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideDown {
+        from { opacity:0; transform: translateY(-8px); }
+        to   { opacity:1; transform: translateY(0);    }
+    }
+    .animate-fade-in { animation: slideDown .3s ease-out; }
+`;
+document.head.appendChild(style);

@@ -40,7 +40,7 @@ header('Content-Type: application/json');
 ob_end_clean();
 
 $method = $_SERVER['REQUEST_METHOD'];
-$action = isset($_GET['action']) ? sanitize($_GET['action']) : '';
+$action = isset($_GET['action']) ? sanitize($_GET['action']) : (isset($_POST['action']) ? sanitize($_POST['action']) : '');
 
 $userId = getCurrentUserId();
 $masterPassword = isset($_POST['master_password']) ? $_POST['master_password'] : '';
@@ -94,6 +94,19 @@ switch ($action) {
         }
         break;
     
+    case 'reveal':
+        if ($method !== 'POST') {
+            jsonResponse(false, 'Invalid method', null, 400);
+        }
+        $accountId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $account = getAccount($userId, $accountId, $encryptionKey);
+        if ($account) {
+            jsonResponse(true, 'Password revealed', ['password' => $account['password']]);
+        } else {
+            jsonResponse(false, 'Account not found', null, 404);
+        }
+        break;
+    
     case 'add_account':
         if ($method !== 'POST') {
             jsonResponse(false, 'Invalid method', null, 400);
@@ -110,6 +123,7 @@ switch ($action) {
         jsonResponse($result['success'], $result['message'], $result, $result['success'] ? 200 : 400);
         break;
     
+    case 'update':
     case 'update_account':
         if ($method !== 'POST') {
             jsonResponse(false, 'Invalid method', null, 400);
