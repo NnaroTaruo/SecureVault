@@ -1,8 +1,5 @@
-const CACHE_NAME = 'securevault-v6';
+const CACHE_NAME = 'securevault-v7';
 const SHELL_ASSETS = [
-    './',
-    './index.php',
-    './dashboard.php',
     './js/dashboard.js',
     './js/pwa.js'
 ];
