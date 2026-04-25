@@ -1,11 +1,10 @@
-const CACHE_NAME = 'securevault-v5';
+const CACHE_NAME = 'securevault-v6';
 const SHELL_ASSETS = [
     './',
     './index.php',
     './dashboard.php',
     './js/dashboard.js',
-    './js/pwa.js',
-    './logo.svg'
+    './js/pwa.js'
 ];
 
 // Install: cache the app shell
