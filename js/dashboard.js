@@ -24,6 +24,63 @@ function showAlert(message, type = 'info') {
     setTimeout(() => el.remove(), 4000);
 }
 
+// ── Web Crypto API Logic ──────────────────────────────────
+async function deriveKey(password, saltHex) {
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]
+    );
+    // PHP's hash_pbkdf2 used the literal hex string as the salt, not the decoded bytes
+    const saltBytes = enc.encode(saltHex);
+    return window.crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: saltBytes, iterations: 100000, hash: "SHA-256" },
+        keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+    );
+}
+
+function bufToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return window.btoa(binary);
+}
+
+function base64ToBuf(base64) {
+    const binary = window.atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+}
+
+async function encryptPasswordLocal(password, key) {
+    const enc = new TextEncoder();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv }, key, enc.encode(password)
+    );
+    const result = new Uint8Array(iv.length + encrypted.byteLength);
+    result.set(iv, 0);
+    result.set(new Uint8Array(encrypted), iv.length);
+    return bufToBase64(result);
+}
+
+async function decryptPasswordLocal(encryptedBase64, key) {
+    try {
+        const data = base64ToBuf(encryptedBase64);
+        const dataArray = new Uint8Array(data);
+        if (dataArray.length < 28) throw new Error("Data too short");
+        const iv = dataArray.slice(0, 12);
+        const ciphertext = dataArray.slice(12);
+        const decrypted = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: iv }, key, ciphertext
+        );
+        const dec = new TextDecoder();
+        return dec.decode(decrypted);
+    } catch (e) {
+        return null;
+    }
+}
+
 // ── Search Logic (Fast & Robust) ──────────────────────────
 function searchVault(query) {
     const q = query.toLowerCase().trim();
@@ -92,17 +149,26 @@ function executeEditFetch(accountId, masterPassword) {
     fetch(`api/accounts.php?action=get_account&id=${accountId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ action: 'get_account', master_password: masterPassword })
+        body: new URLSearchParams({ action: 'get_account' })
     })
     .then(r => r.json())
-    .then(data => {
+    .then(async data => {
         if (data.success) {
             const acc = data.data.account;
+            
+            const key = await deriveKey(masterPassword, USER_SALT);
+            const decryptedPassword = await decryptPasswordLocal(acc.password_encrypted, key);
+            
+            if (decryptedPassword === null) {
+                showAlert('Wrong master key', 'error');
+                return;
+            }
+
             document.getElementById('accountId').value        = acc.id;
             document.getElementById('serviceName').value      = acc.service_name;
             document.getElementById('category').value         = acc.category_id || 0;
             document.getElementById('accountUsername').value  = acc.username;
-            document.getElementById('accountPassword').value  = acc.password;
+            document.getElementById('accountPassword').value  = decryptedPassword;
             document.getElementById('website').value          = acc.website_url;
             document.getElementById('notes').value            = acc.notes || '';
             document.getElementById('masterPassword').value   = masterPassword; 
@@ -116,7 +182,7 @@ function executeEditFetch(accountId, masterPassword) {
     .catch(() => showAlert('Failed to connect to vault', 'error'));
 }
 
-function handleAccountSubmit(event) {
+async function handleAccountSubmit(event) {
     event.preventDefault();
 
     const accountId    = document.getElementById('accountId').value;
@@ -133,29 +199,33 @@ function handleAccountSubmit(event) {
     const isEdit   = !!accountId;
     const endpoint = isEdit ? 'api/accounts.php?action=update' : 'api/accounts.php?action=add_account';
 
-    const body = new URLSearchParams({
-        service_name:  serviceName,
-        category_id:   categoryId,
-        username:      username,
-        password:      password,
-        website_url:   website,
-        notes:         notes,
-        master_password: masterPass,
-    });
-    if (isEdit) body.append('id', accountId);
+    try {
+        const key = await deriveKey(masterPass, USER_SALT);
+        const encryptedPassword = await encryptPasswordLocal(password, key);
 
-    fetch(endpoint, { method: 'POST', body })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showAlert(isEdit ? 'Account updated!' : 'Account added!', 'success');
-                closeModal('accountModal');
-                setTimeout(() => location.reload(), 900);
-            } else {
-                showAlert(data.message || 'Failed to save account', 'error');
-            }
-        })
-        .catch(() => showAlert('Network error', 'error'));
+        const body = new URLSearchParams({
+            service_name:  serviceName,
+            category_id:   categoryId,
+            username:      username,
+            encrypted_password: encryptedPassword,
+            website_url:   website,
+            notes:         notes
+        });
+        if (isEdit) body.append('id', accountId);
+
+        const response = await fetch(endpoint, { method: 'POST', body });
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert(isEdit ? 'Account updated!' : 'Account added!', 'success');
+            closeModal('accountModal');
+            setTimeout(() => location.reload(), 900);
+        } else {
+            showAlert(data.message || 'Failed to save account', 'error');
+        }
+    } catch (e) {
+        showAlert('Encryption or network error', 'error');
+    }
 }
 
 // ── Master Key Prompt ─────────────────────────────────────
@@ -221,12 +291,20 @@ function executeRevealPassword(accountId, btn, masterPassword) {
     fetch('api/accounts.php?action=reveal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:   new URLSearchParams({ action: 'reveal', id: accountId, master_password: masterPassword }),
+        body:   new URLSearchParams({ action: 'reveal', id: accountId }),
     })
     .then(r => r.json())
-    .then(data => {
+    .then(async data => {
         if (data.success) {
-            displayEl.textContent = data.data.password;
+            const key = await deriveKey(masterPassword, USER_SALT);
+            const decryptedPassword = await decryptPasswordLocal(data.data.password_encrypted, key);
+            
+            if (decryptedPassword === null) {
+                showAlert('Wrong master key', 'error');
+                return;
+            }
+            
+            displayEl.textContent = decryptedPassword;
             displayEl.classList.remove('password-masked', 'pw-dots');
             displayEl.style.color = '#00E676';
             displayEl.style.letterSpacing = 'normal';
@@ -240,10 +318,10 @@ function executeRevealPassword(accountId, btn, masterPassword) {
             
             showAlert('Password revealed (Auto-hiding in 30s)', 'success');
         } else {
-            showAlert(data.message || 'Wrong master key', 'error');
+            showAlert(data.message || 'Failed to retrieve encrypted password', 'error');
         }
     })
-    .catch(() => showAlert('Failed to decrypt password', 'error'));
+    .catch(() => showAlert('Failed to connect to vault', 'error'));
 }
 
 function hidePasswordElement(accountId, displayEl) {
@@ -278,7 +356,7 @@ function executeDeleteAccount(accountId, masterPassword) {
     fetch('api/accounts.php?action=delete_account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:   new URLSearchParams({ action: 'delete_account', id: accountId, master_password: masterPassword }),
+        body:   new URLSearchParams({ action: 'delete_account', id: accountId }),
     })
     .then(r => r.json())
     .then(data => {
@@ -397,3 +475,12 @@ style.textContent = `
     .animate-fade-in { animation: slideDown .3s ease-out; }
 `;
 document.head.appendChild(style);
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (!localStorage.getItem('seen_upgrade_zk_v1')) {
+        setTimeout(() => {
+            showAlert('🎉 SecureVault Upgraded: End-to-End Zero-Knowledge Encryption is now live!', 'success');
+            localStorage.setItem('seen_upgrade_zk_v1', 'true');
+        }, 500);
+    }
+});

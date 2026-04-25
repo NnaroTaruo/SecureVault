@@ -641,9 +641,21 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             <p id="masterKeyModalMessage" class="text-sm text-gray-400">Enter your Master Key to perform this action.</p>
             <div>
                 <label for="promptMasterKey" class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">Master Key</label>
-                <input type="password" id="promptMasterKey" placeholder="••••••••"
-                       class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white
-                              placeholder-gray-500 text-sm focus:outline-none focus:border-primary transition-all" required>
+                <div class="relative">
+                    <input type="password" id="promptMasterKey" placeholder="••••••••"
+                           class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white
+                                  placeholder-gray-500 text-sm focus:outline-none focus:border-primary transition-all pr-12" required>
+                    <button type="button" onclick="const input = document.getElementById('promptMasterKey'); input.type = input.type === 'password' ? 'text' : 'password';"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-primary transition-colors p-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                                     -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="flex gap-3">
                 <button type="submit" id="masterKeySubmitBtn"
@@ -682,6 +694,19 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     </div>
 </div>
 
+<script>
+    const USER_SALT = "<?php echo isset($_SESSION['master_key_salt']) ? addslashes($_SESSION['master_key_salt']) : ''; ?>";
+    const APP_VERSION = "v5";
+    if (localStorage.getItem('app_version') !== APP_VERSION) {
+        localStorage.setItem('app_version', APP_VERSION);
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                for (let name of names) caches.delete(name);
+            });
+        }
+        window.location.reload(true);
+    }
+</script>
 <script src="js/dashboard.js?v=5"></script>
 <script src="js/pwa.js"></script>
 

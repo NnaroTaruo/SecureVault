@@ -43,15 +43,8 @@ $method = $_SERVER['REQUEST_METHOD'];
 $action = isset($_GET['action']) ? sanitize($_GET['action']) : (isset($_POST['action']) ? sanitize($_POST['action']) : '');
 
 $userId = getCurrentUserId();
-$masterPassword = isset($_POST['master_password']) ? $_POST['master_password'] : '';
-
-// Verify master password is correct
-if (empty($masterPassword)) {
-    jsonResponse(false, 'Master password required', null, 401);
-}
-
 $db = Database::getInstance()->getConnection();
-$stmt = $db->prepare('SELECT password_hash, master_key_salt FROM users WHERE id = ?');
+$stmt = $db->prepare('SELECT master_key_salt FROM users WHERE id = ?');
 $stmt->bind_param('i', $userId);
 $stmt->execute();
 $userResult = $stmt->get_result();
@@ -61,17 +54,6 @@ if ($userResult->num_rows === 0) {
 }
 
 $userRow = $userResult->fetch_assoc();
-
-// Verify master password hash
-if (!verifyPassword($masterPassword, $userRow['password_hash'])) {
-    jsonResponse(false, 'Invalid master password', null, 401);
-}
-
-// Now derive encryption key from verified password
-$encryptionKey = deriveEncryptionKey($masterPassword, $userRow['master_key_salt']);
-if (!$encryptionKey) {
-    jsonResponse(false, 'Failed to derive encryption key', null, 500);
-}
 
 switch ($action) {
     case 'get_accounts':
@@ -85,9 +67,13 @@ switch ($action) {
     
     case 'get_account':
         $accountId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-        $account = getAccount($userId, $accountId, $encryptionKey);
-        if ($account) {
-            unset($account['password_encrypted']);
+        // Fetch account directly from db to get encrypted password without decrypting
+        $stmt = $db->prepare('SELECT id, service_name, username, password_encrypted, website_url, notes, category_id, created_at, updated_at FROM accounts WHERE id = ? AND user_id = ?');
+        $stmt->bind_param('ii', $accountId, $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            $account = $result->fetch_assoc();
             jsonResponse(true, 'Account retrieved', ['account' => $account]);
         } else {
             jsonResponse(false, 'Account not found', null, 404);
@@ -99,9 +85,13 @@ switch ($action) {
             jsonResponse(false, 'Invalid method', null, 400);
         }
         $accountId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-        $account = getAccount($userId, $accountId, $encryptionKey);
-        if ($account) {
-            jsonResponse(true, 'Password revealed', ['password' => $account['password']]);
+        $stmt = $db->prepare('SELECT password_encrypted FROM accounts WHERE id = ? AND user_id = ?');
+        $stmt->bind_param('ii', $accountId, $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            $account = $result->fetch_assoc();
+            jsonResponse(true, 'Password revealed', ['password_encrypted' => $account['password_encrypted']]);
         } else {
             jsonResponse(false, 'Account not found', null, 404);
         }
@@ -114,13 +104,23 @@ switch ($action) {
         
         $serviceName = sanitize($_POST['service_name'] ?? '');
         $username = sanitize($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $encryptedPassword = $_POST['encrypted_password'] ?? '';
         $categoryId = isset($_POST['category_id']) ? (int)$_POST['category_id'] : 0;
         $websiteUrl = sanitize($_POST['website_url'] ?? '');
         $notes = sanitize($_POST['notes'] ?? '');
         
-        $result = addAccount($userId, $serviceName, $username, $password, $categoryId, $websiteUrl, $notes, $encryptionKey);
-        jsonResponse($result['success'], $result['message'], $result, $result['success'] ? 200 : 400);
+        if (empty($encryptedPassword)) {
+            jsonResponse(false, 'Encrypted password is required', null, 400);
+        }
+        
+        $stmt = $db->prepare('INSERT INTO accounts (user_id, service_name, username, password_encrypted, category_id, website_url, notes) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt->bind_param('isssiss', $userId, $serviceName, $username, $encryptedPassword, $categoryId, $websiteUrl, $notes);
+        
+        if ($stmt->execute()) {
+            jsonResponse(true, 'Account added successfully', ['id' => $db->insert_id]);
+        } else {
+            jsonResponse(false, 'Failed to add account', null, 500);
+        }
         break;
     
     case 'update':
@@ -132,13 +132,23 @@ switch ($action) {
         $accountId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
         $serviceName = sanitize($_POST['service_name'] ?? '');
         $username = sanitize($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $encryptedPassword = $_POST['encrypted_password'] ?? '';
         $categoryId = isset($_POST['category_id']) ? (int)$_POST['category_id'] : 0;
         $websiteUrl = sanitize($_POST['website_url'] ?? '');
         $notes = sanitize($_POST['notes'] ?? '');
         
-        $result = updateAccount($userId, $accountId, $serviceName, $username, $password, $categoryId, $websiteUrl, $notes, $encryptionKey);
-        jsonResponse($result['success'], $result['message'], null, $result['success'] ? 200 : 400);
+        if (empty($encryptedPassword)) {
+            jsonResponse(false, 'Encrypted password is required', null, 400);
+        }
+        
+        $stmt = $db->prepare('UPDATE accounts SET service_name = ?, username = ?, password_encrypted = ?, category_id = ?, website_url = ?, notes = ?, updated_at = NOW() WHERE id = ? AND user_id = ?');
+        $stmt->bind_param('sssissii', $serviceName, $username, $encryptedPassword, $categoryId, $websiteUrl, $notes, $accountId, $userId);
+        
+        if ($stmt->execute()) {
+            jsonResponse(true, 'Account updated successfully');
+        } else {
+            jsonResponse(false, 'Failed to update account', null, 500);
+        }
         break;
     
     case 'delete_account':
