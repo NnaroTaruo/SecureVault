@@ -60,3 +60,17 @@ window.addEventListener('appinstalled', (evt) => {
     console.log('SecureVault was installed.');
     dismissInstallBanner();
 });
+
+// ── App Protection ─────────────────────────────────────────
+// Prevent right-click (context menu)
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// Prevent common DevTools keyboard shortcuts
+document.addEventListener('keydown', e => {
+    // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U
+    if (e.key === 'F12' || 
+       (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C' || e.key === 'i' || e.key === 'j' || e.key === 'c')) || 
+       (e.ctrlKey && (e.key === 'U' || e.key === 'u'))) {
+        e.preventDefault();
+    }
+});
