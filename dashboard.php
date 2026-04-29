@@ -468,6 +468,15 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             </svg>
             Settings
         </button>
+        <button onclick="openModal('aboutModal')"
+                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+                       text-gray-400 hover:text-white hover:bg-dark-border/50 transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            About App
+        </button>
         <button onclick="logout()"
                 class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
                        text-gray-400 hover:text-red-400 hover:bg-red-900/10 transition-all">
@@ -606,7 +615,17 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                 </button>
             </div>
         </form>
-        <div class="p-5 border-t border-dark-border">
+        <div class="p-5 border-t border-dark-border space-y-3">
+            <button onclick="closeModal('settingsModal'); openModal('aboutModal');"
+                    class="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                           bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20
+                           transition-all text-sm font-semibold">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                About App
+            </button>
             <button onclick="logout()"
                     class="w-full flex items-center justify-center gap-2 py-3 rounded-xl
                            text-red-400 hover:bg-red-900/10 border border-red-900/30
@@ -707,7 +726,49 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
         window.location.reload(true);
     }
 </script>
-<script src="js/dashboard.js?v=5"></script>
+<!-- About App Modal -->
+<div id="aboutModal"
+     class="hidden fixed inset-0 bg-black/70 backdrop-blur-md
+            flex items-center justify-center z-50 p-4">
+    <div class="fixed inset-0" onclick="closeModal('aboutModal')"></div>
+    <div class="bg-dark-card border border-primary/30 rounded-3xl
+                w-full max-w-sm relative z-10 shadow-[0_0_50px_rgba(0,230,118,0.15)] modal-anim overflow-hidden">
+        <!-- Neon Glow Background Effect -->
+        <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl"></div>
+        
+        <div class="relative p-8 text-center flex flex-col items-center">
+            <button onclick="closeModal('aboutModal')" class="absolute top-4 right-5 text-2xl text-gray-400 hover:text-white transition-colors">&times;</button>
+            
+            <h2 class="text-xs font-bold text-gray-500 tracking-[0.3em] uppercase mb-6">About the App</h2>
+            
+            <!-- Animated Profile Picture -->
+            <div class="relative mb-5 group animate-float">
+                <!-- Rotating Neon Ring -->
+                <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-[#00C65E] to-[#080E1A] opacity-75 group-hover:opacity-100 blur transition-opacity duration-500" style="animation: rotateLighting 3s linear infinite;"></div>
+                <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-[#00C65E] to-[#080E1A]" style="animation: rotateLighting 3s linear infinite;"></div>
+                <!-- Profile Image -->
+                <img src="ronan.jpg" alt="Ronan - Security Developer" class="relative w-28 h-28 rounded-full object-cover border-2 border-dark-card shadow-2xl transition-transform duration-500 group-hover:scale-105">
+            </div>
+            
+            <h3 class="text-2xl font-black text-white tracking-tight mb-1">Ronan</h3>
+            <p class="text-sm text-primary font-bold tracking-widest uppercase mb-4">Security Developer</p>
+            
+            <p class="text-sm text-gray-400 leading-relaxed mb-6">
+                Architect and visionary behind <span class="text-white font-semibold">SecureVault V1.2 PWA</span>. Engineering bank-grade security into a seamless, high-performance web experience.
+            </p>
+            
+            <div class="w-full h-px bg-gradient-to-r from-transparent via-dark-border to-transparent mb-6"></div>
+            
+            <div class="flex gap-4 items-center justify-center text-xs text-gray-500">
+                <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> Systems Active</span>
+                <span>v1.2.0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/dashboard.js?v=6"></script>
 <script src="js/pwa.js"></script>
 
 <!-- PWA Install Banner (Premium) -->

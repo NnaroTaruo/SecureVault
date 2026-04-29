@@ -454,7 +454,7 @@ document.addEventListener('keydown', e => {
         const overlay = document.getElementById('searchOverlay');
         if (overlay && !overlay.classList.contains('hidden')) { hideSearchOverlay(); return; }
 
-        ['masterKeyModal','accountModal','settingsModal','logoutModal'].forEach(id => {
+        ['masterKeyModal','accountModal','settingsModal','logoutModal','aboutModal'].forEach(id => {
             const el = document.getElementById(id);
             if (el && !el.classList.contains('hidden')) closeModal(id);
         });
@@ -472,7 +472,16 @@ style.textContent = `
         from { opacity:0; transform: translateY(-8px); }
         to   { opacity:1; transform: translateY(0);    }
     }
+    @keyframes rotateLighting {
+        0%   { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    @keyframes floatFloat {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-8px); }
+    }
     .animate-fade-in { animation: slideDown .3s ease-out; }
+    .animate-float { animation: floatFloat 4s ease-in-out infinite; }
 `;
 document.head.appendChild(style);
 
