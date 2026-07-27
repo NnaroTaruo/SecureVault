@@ -748,11 +748,11 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                 <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-[#00C65E] to-[#080E1A] opacity-75 group-hover:opacity-100 blur transition-opacity duration-500" style="animation: rotateLighting 3s linear infinite;"></div>
                 <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-[#00C65E] to-[#080E1A]" style="animation: rotateLighting 3s linear infinite;"></div>
                 <!-- Profile Image -->
-                <img src="ronan.jpg" alt="Ronan - Security Developer" class="relative w-28 h-28 rounded-full object-cover border-2 border-dark-card shadow-2xl transition-transform duration-500 group-hover:scale-105">
+                <img src="ronan.jpg" alt="Ronan - Founder and Developer" class="relative w-28 h-28 rounded-full object-cover border-2 border-dark-card shadow-2xl transition-transform duration-500 group-hover:scale-105">
             </div>
             
             <h3 class="text-2xl font-black text-white tracking-tight mb-1">Ronan</h3>
-            <p class="text-sm text-primary font-bold tracking-widest uppercase mb-4">Security Developer</p>
+            <p class="text-sm text-primary font-bold tracking-widest uppercase mb-4">Founder and Developer</p>
             
             <p class="text-sm text-gray-400 leading-relaxed mb-6">
                 Architect and visionary behind <span class="text-white font-semibold">SecureVault V1.2 PWA</span>. Engineering bank-grade security into a seamless, high-performance web experience.
