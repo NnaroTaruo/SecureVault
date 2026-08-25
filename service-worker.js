@@ -1,7 +1,8 @@
-const CACHE_NAME = 'securevault-v7';
+const CACHE_NAME = 'securevault-v8';
 const SHELL_ASSETS = [
     './js/dashboard.js',
-    './js/pwa.js'
+    './js/pwa.js',
+    './logo.svg'
 ];
 
 // Install: cache the app shell
@@ -12,7 +13,7 @@ self.addEventListener('install', event => {
     self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: clean all old caches immediately
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(keys =>
@@ -22,7 +23,7 @@ self.addEventListener('activate', event => {
     self.clients.claim();
 });
 
-// Fetch: network-first for API/PHP, cache-first for assets
+// Fetch: Always network-first for navigations and PHP pages, cache-first for static assets
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
@@ -31,8 +32,8 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Network-first for PHP pages
-    if (url.pathname.endsWith('.php')) {
+    // Navigations, PHP endpoints, or root directory: ALWAYS fetch from network
+    if (event.request.mode === 'navigate' || url.pathname.endsWith('.php') || url.pathname.endsWith('/')) {
         event.respondWith(
             fetch(event.request).catch(() => caches.match(event.request))
         );

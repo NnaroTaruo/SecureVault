@@ -15,10 +15,17 @@ function showAlert(message, type = 'info') {
                       flex items-center gap-2 ${colors[type] || colors.info}`;
     el.style.cssText += 'animation: slideDown .25s ease-out;';
 
-    const icons = { success:'✅', error:'❌', warning:'⚠️', info:'ℹ️' };
-    el.innerHTML = `<span class="flex-shrink-0">${icons[type] || '🔔'}</span>
-                    <span class="flex-1">${message}</span>
-                    <button onclick="this.parentElement.remove()" class="flex-shrink-0 opacity-60 hover:opacity-100 text-lg leading-none">&times;</button>`;
+    const messageEl = document.createElement('span');
+    messageEl.className = 'flex-1';
+    messageEl.textContent = message;
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'flex-shrink-0 opacity-60 hover:opacity-100 text-lg leading-none';
+    closeButton.innerHTML = '&times;';
+    closeButton.addEventListener('click', () => el.remove());
+
+    el.append(messageEl, closeButton);
 
     alertBox.appendChild(el);
     setTimeout(() => el.remove(), 4000);

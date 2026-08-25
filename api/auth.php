@@ -9,6 +9,14 @@ ob_start();
 require_once '../config.php';
 require_once '../auth.php';
 
+if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
+    ob_end_clean();
+    http_response_code(503);
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Service is currently under maintenance']);
+    exit;
+}
+
 // Set error handling
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     ob_end_clean();

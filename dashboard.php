@@ -167,7 +167,6 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 <div id="installBanner"
      class="hidden fixed top-[118px] left-4 right-4 z-20 bg-dark-card border border-primary/30
             rounded-xl px-4 py-3 flex items-center gap-3 shadow-lg md:ml-64">
-    <span class="text-xl">📲</span>
     <div class="flex-1">
         <p class="text-xs font-semibold">Install SecureVault</p>
         <p class="text-xs text-gray-400">Add to home screen for app experience</p>
@@ -651,9 +650,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     <div class="bg-dark-card border border-dark-border rounded-t-2xl md:rounded-2xl
                 w-full md:max-w-sm relative z-10 shadow-2xl modal-anim">
         <div class="p-5 border-b border-dark-border flex justify-between items-center">
-            <h2 id="masterKeyModalTitle" class="text-lg font-bold flex items-center gap-2">
-                <span class="text-primary">🔓</span> Authenticate
-            </h2>
+            <h2 id="masterKeyModalTitle" class="text-lg font-bold">Authenticate</h2>
             <button onclick="closeModal('masterKeyModal')" class="text-2xl text-gray-400 hover:text-white">&times;</button>
         </div>
         <form id="masterKeyForm" onsubmit="handleMasterKeySubmit(event)" class="p-5 space-y-4">
@@ -697,7 +694,6 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     <div class="fixed inset-0" onclick="closeModal('logoutModal')"></div>
     <div class="bg-dark-card border border-dark-border rounded-t-2xl md:rounded-2xl
                 w-full md:max-w-sm relative z-10 shadow-2xl modal-anim text-center p-6">
-        <div class="text-4xl mb-3">👋</div>
         <h2 class="text-xl font-bold mb-2">Secure Logout</h2>
         <p class="text-sm text-gray-400 mb-6">Lock your vault and end your secure session?</p>
         <div class="flex gap-3">
@@ -775,7 +771,6 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 <div id="installBanner" class="hidden fixed bottom-24 left-6 right-6 md:bottom-10 md:right-10 md:left-auto md:max-w-sm z-[100] animate-bounce">
     <div class="bg-dark-card/95 backdrop-blur-xl border border-primary/30 rounded-2xl p-5 shadow-2xl shadow-primary/20 flex flex-col gap-4">
         <div class="flex items-center gap-4">
-            <div class="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center text-primary text-2xl shrink-0">🔐</div>
             <div class="flex-1">
                 <h3 class="font-bold text-white text-xs">Unlock Native Experience</h3>
                 <p class="text-[10px] text-gray-400">Install SecureVault for a premium, fast experience.</p>

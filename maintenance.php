@@ -49,8 +49,8 @@ http_response_code(503);
     </div>
 
     <div class="relative z-10 max-w-md w-full bg-dark-card border border-dark-border rounded-3xl p-8 shadow-2xl">
-        <div class="w-20 h-20 mx-auto rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-4xl mb-6 pulse-anim">
-            🛠️
+        <div class="w-20 h-20 mx-auto rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mb-6 pulse-anim">
+            <img src="logo.svg" alt="" class="w-10 h-10" aria-hidden="true">
         </div>
         
         <h1 class="text-2xl font-extrabold mb-2 tracking-tight">System Upgrade</h1>

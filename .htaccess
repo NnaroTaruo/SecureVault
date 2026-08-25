@@ -1,0 +1,40 @@
+# ==============================================================================
+# SecureVault - Production Apache Configuration (InfinityFree / Shared Hosting)
+# ==============================================================================
+
+# 1. Enable Rewrite Engine & Force HTTPS (except for local testing)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Force HTTPS in production (exclude localhost & 127.0.0.1 for local dev)
+    RewriteCond %{HTTP_HOST} !^localhost [NC]
+    RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# 2. Block direct access to sensitive files
+<FilesMatch "^(database\.sql|config\.example\.php|AGENTS\.md|\.gitignore|\.env)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 3. Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 4. Correct MIME types for PWA and SVGs
+<IfModule mod_mime.c>
+    AddType application/manifest+json .json
+    AddType image/svg+xml .svg
+    AddType application/javascript .js
+</IfModule>
+
+# 5. Disable Directory Browsing
+Options -Indexes
