@@ -620,9 +620,15 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             </div>
         </form>
         <div class="p-5 border-t border-dark-border space-y-3">
-            <button onclick="closeModal('settingsModal'); openModal('aboutModal');"
+            <button onclick="closeModal('settingsModal'); openModal('updateNoticeModal');"
                     class="w-full flex items-center justify-center gap-2 py-3 rounded-xl
                            bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20
+                           transition-all text-sm font-bold">
+                🚀 What's New in v1.3
+            </button>
+            <button onclick="closeModal('settingsModal'); openModal('aboutModal');"
+                    class="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+                           bg-dark-bg/80 border border-dark-border text-gray-300 hover:text-white hover:border-primary/40
                            transition-all text-sm font-semibold">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -639,6 +645,92 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                           d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                 </svg>
                 Lock & Logout
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- What's New Update Notice Modal -->
+<div id="updateNoticeModal"
+     class="hidden fixed inset-0 bg-black/75 backdrop-blur-md
+            flex items-center justify-center z-50 p-4">
+    <div class="fixed inset-0" onclick="closeUpdateNotice()"></div>
+    <div class="bg-dark-card border border-primary/40 rounded-3xl
+                w-full max-w-md relative z-10 shadow-[0_0_50px_rgba(0,230,118,0.2)] modal-anim overflow-hidden">
+        
+        <!-- Glowing Header -->
+        <div class="p-6 border-b border-dark-border bg-gradient-to-r from-primary/15 via-transparent to-transparent flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary text-xl shadow-lg shadow-primary/20">
+                    🚀
+                </div>
+                <div>
+                    <h2 class="text-base font-extrabold text-white tracking-tight">System Upgrade: What's New</h2>
+                    <p class="text-[11px] text-primary font-bold uppercase tracking-wider">SecureVault v1.3 PWA Release</p>
+                </div>
+            </div>
+            <button onclick="closeUpdateNotice()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+
+        <div class="p-6 space-y-3.5 max-h-[60vh] overflow-y-auto hide-scrollbar">
+            <!-- Feature 1: Offline Vault Access -->
+            <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-dark-border flex gap-3 items-start">
+                <div class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
+                    📴
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-white mb-0.5">Zero-Knowledge Offline Vault</h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        Your encrypted passwords now automatically cache to the browser's local IndexedDB. You can open the PWA and decrypt credentials with zero Wi-Fi or cellular data!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 2: Product Landing Page -->
+            <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-dark-border flex gap-3 items-start">
+                <div class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
+                    🌐
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-white mb-0.5">Product Landing Page & Crypto Sandbox</h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        Added a new homepage with an interactive WebCrypto sandbox demonstrating real-time AES-256-GCM authenticated key derivation.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 3: Master Gateway Redesign -->
+            <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-dark-border flex gap-3 items-start">
+                <div class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
+                    📱
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-white mb-0.5">Responsive Master Gateway</h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        Dedicated touch-friendly login & registration gateway (<code class="text-primary text-[10px]">login.php</code>) with a real-time entropy analyzer and anti-phishing safeguards.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature 4: Service Worker v9 -->
+            <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-dark-border flex gap-3.5 items-start">
+                <div class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
+                    ⚡
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-white mb-0.5">PWA Engine v9</h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        Accelerated app shell startup, background vault cache synchronization, and HTTPS enforcement.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-dark-border bg-dark-surface/40 flex items-center justify-between">
+            <span class="text-[11px] text-gray-500 font-mono">100% Zero-Knowledge</span>
+            <button onclick="closeUpdateNotice()"
+                    class="px-5 py-2.5 bg-primary hover:bg-primary-dark text-dark-bg font-extrabold text-xs rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-95">
+                Explore Vault 🚀
             </button>
         </div>
     </div>

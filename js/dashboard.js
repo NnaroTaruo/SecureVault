@@ -798,7 +798,7 @@ document.addEventListener('keydown', e => {
         const overlay = document.getElementById('searchOverlay');
         if (overlay && !overlay.classList.contains('hidden')) { hideSearchOverlay(); return; }
 
-        ['masterKeyModal','accountModal','settingsModal','logoutModal','aboutModal'].forEach(id => {
+        ['masterKeyModal','accountModal','settingsModal','logoutModal','aboutModal','updateNoticeModal'].forEach(id => {
             const el = document.getElementById(id);
             if (el && !el.classList.contains('hidden')) closeModal(id);
         });
@@ -808,6 +808,11 @@ document.addEventListener('keydown', e => {
         showSearchOverlay();
     }
 });
+
+function closeUpdateNotice() {
+    closeModal('updateNoticeModal');
+    localStorage.setItem('seen_update_v1_3', 'true');
+}
 
 // Network status listeners
 window.addEventListener('online', () => {
@@ -825,4 +830,11 @@ window.addEventListener('offline', () => {
 window.addEventListener('DOMContentLoaded', () => {
     updateStatusPill(navigator.onLine);
     syncVaultFromNetwork();
+
+    // Show update notice modal on first visit of v1.3
+    if (!localStorage.getItem('seen_update_v1_3')) {
+        setTimeout(() => {
+            openModal('updateNoticeModal');
+        }, 500);
+    }
 });
