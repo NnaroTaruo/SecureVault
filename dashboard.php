@@ -121,10 +121,15 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     <div class="max-w-2xl mx-auto flex items-center justify-between md:ml-64">
         <div>
             <h1 class="text-2xl font-extrabold tracking-tight">My Assets</h1>
-            <p class="text-xs text-primary font-semibold mt-0.5 flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block"></span>
-                <?php echo count($accounts); ?> SECURE ASSET<?php echo count($accounts) !== 1 ? 's' : ''; ?> ACTIVE
-            </p>
+            <div class="flex items-center gap-2 mt-0.5">
+                <p id="assetsCountBadge" class="text-xs text-primary font-semibold flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block"></span>
+                    <span id="activeCountText"><?php echo count($accounts); ?> SECURE ASSET<?php echo count($accounts) !== 1 ? 's' : ''; ?> ACTIVE</span>
+                </p>
+                <span id="offlineStatusPill" class="hidden text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-yellow-900/40 border border-yellow-600/50 text-yellow-400">
+                    🟡 Offline Mode
+                </span>
+            </div>
         </div>
         <div class="flex items-center gap-2">
             <button onclick="showSearchOverlay()" id="searchBtn"
@@ -711,16 +716,6 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 
 <script>
     const USER_SALT = "<?php echo isset($_SESSION['master_key_salt']) ? addslashes($_SESSION['master_key_salt']) : ''; ?>";
-    const APP_VERSION = "v5";
-    if (localStorage.getItem('app_version') !== APP_VERSION) {
-        localStorage.setItem('app_version', APP_VERSION);
-        if ('caches' in window) {
-            caches.keys().then(names => {
-                for (let name of names) caches.delete(name);
-            });
-        }
-        window.location.reload(true);
-    }
 </script>
 <!-- About App Modal -->
 <div id="aboutModal"

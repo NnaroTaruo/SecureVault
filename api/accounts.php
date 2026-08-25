@@ -64,6 +64,29 @@ if ($userResult->num_rows === 0) {
 $userRow = $userResult->fetch_assoc();
 
 switch ($action) {
+    case 'sync_vault':
+        $stmt = $db->prepare('
+            SELECT a.id, a.service_name, a.username, a.password_encrypted, a.website_url, a.notes, a.category_id, 
+                   c.name as category_name, c.icon as category_icon, a.created_at, a.updated_at
+            FROM accounts a
+            LEFT JOIN categories c ON a.category_id = c.id
+            WHERE a.user_id = ?
+            ORDER BY c.name ASC, a.service_name ASC
+        ');
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $encryptedAccounts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $categories = getUserCategories($userId);
+        
+        jsonResponse(true, 'Vault synced for offline use', [
+            'accounts'   => $encryptedAccounts,
+            'categories' => $categories,
+            'salt'       => $userRow['master_key_salt'],
+            'username'   => $_SESSION['username'] ?? 'User',
+            'synced_at'  => date('c')
+        ]);
+        break;
+
     case 'get_accounts':
         $accounts = getUserAccounts($userId);
         // Don't return encrypted passwords in list
