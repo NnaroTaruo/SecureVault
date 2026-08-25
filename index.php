@@ -131,6 +131,7 @@ $currentUser  = $userLoggedIn ? getCurrentUser() : null;
 
             <!-- Desktop Nav Links -->
             <nav class="hidden lg:flex items-center gap-7 text-sm font-semibold text-gray-300">
+                <a href="#why" class="hover:text-primary transition-colors">Why SecureVault</a>
                 <a href="#features" class="hover:text-primary transition-colors">Features</a>
                 <a href="#crypto-demo" class="hover:text-primary transition-colors">Live Crypto</a>
                 <a href="#architecture" class="hover:text-primary transition-colors">Security Model</a>
@@ -169,6 +170,7 @@ $currentUser  = $userLoggedIn ? getCurrentUser() : null;
 
         <!-- Mobile Drawer Menu -->
         <div id="mobileDrawer" class="hidden lg:hidden border-t border-dark-border/80 bg-dark-bg/95 backdrop-blur-xl px-4 py-4 space-y-3">
+            <a href="#why" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Why SecureVault</a>
             <a href="#features" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Features</a>
             <a href="#crypto-demo" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Live Cryptography</a>
             <a href="#architecture" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Security Model</a>
@@ -311,6 +313,83 @@ $currentUser  = $userLoggedIn ? getCurrentUser() : null;
                 <div class="mt-6 pt-4 border-t border-dark-border flex items-center justify-between text-[11px] text-gray-500">
                     <span>* Notice how the ciphertext changes on every encrypt due to unique random IV generation.</span>
                     <span class="text-primary font-semibold">Zero Plaintext Transmission Guaranteed</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== WHY SECUREVAULT SECTION ===== -->
+        <section id="why" class="max-w-6xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
+            <div class="text-center max-w-3xl mx-auto mb-14">
+                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-wider mb-3">
+                    The Zero-Knowledge Advantage
+                </div>
+                <h2 class="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
+                    Why Choose <span class="text-gradient">SecureVault</span>?
+                </h2>
+                <p class="text-gray-400 text-sm sm:text-base leading-relaxed">
+                    Most password managers store your encrypted credentials on proprietary cloud servers with recovery backdoors. SecureVault is engineered with a strict <strong class="text-white">zero-trust paradigm</strong>: we cannot access your data, ever.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Reason 1 -->
+                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
+                            🔒
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">1. True Zero-Knowledge Architecture</h3>
+                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
+                                Your Master Password and plaintext credentials <strong>never touch our servers</strong>. All key derivation (100,000 PBKDF2 iterations) and AES-256-GCM encryption take place strictly in-memory in your local web browser. Even if our database were leaked, an attacker only gets indecipherable random ciphertext.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reason 2 -->
+                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
+                            📴
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">2. 100% Offline Access via IndexedDB</h3>
+                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
+                                No internet? No cellular service? No problem. SecureVault automatically saves an encrypted copy of your vault into your device's native <strong>IndexedDB</strong>. You can open the PWA on an airplane or during an outage and decrypt your passwords seamlessly offline.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reason 3 -->
+                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
+                            ⚡
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">3. Installable PWA with Zero Bloat</h3>
+                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
+                                Avoid downloading bulky 300MB native desktop programs or invasive browser extensions. SecureVault is an ultra-lightweight <strong>Progressive Web App (PWA)</strong> that installs directly to your home screen or desktop in one tap with native-like fluidity.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reason 4 -->
+                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
+                            🛡️
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">4. Military-Grade Authenticated Cryptography</h3>
+                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
+                                Every single credential entry is protected by dynamic <strong>12-byte cryptographically secure random IVs</strong>, 16-byte Galois authentication tags, and temporary in-memory auto-masking after 30 seconds to prevent shoulder surfing.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
