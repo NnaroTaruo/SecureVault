@@ -102,7 +102,7 @@ $showRegister = isset($_GET['register']);
         <div class="flex items-center gap-2">
             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] sm:text-xs font-bold uppercase tracking-wider">
                 <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                <span>PWA v1.2</span>
+                <span>PWA v1.3</span>
             </span>
         </div>
     </header>

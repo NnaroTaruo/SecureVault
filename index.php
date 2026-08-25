@@ -576,7 +576,7 @@ $currentUser  = $userLoggedIn ? getCurrentUser() : null;
                 </div>
                 <div>
                     <span class="font-extrabold text-white tracking-tight">SECURE<span class="text-primary font-black">VAULT</span></span>
-                    <p class="text-[10px] text-gray-500">Zero-Knowledge Personal Vault · v1.2 PWA Edition</p>
+                    <p class="text-[10px] text-gray-500">Zero-Knowledge Personal Vault · v1.3 PWA Edition</p>
                 </div>
             </div>
 

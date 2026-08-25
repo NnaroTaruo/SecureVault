@@ -408,7 +408,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                     flex items-center justify-center text-primary font-black text-base">S</div>
         <div>
             <div class="font-bold text-sm tracking-tight text-white">SECURE VAULT</div>
-            <div class="text-[10px] text-primary font-bold uppercase tracking-widest">v1.2 PWA</div>
+            <div class="text-[10px] text-primary font-bold uppercase tracking-widest">v1.3 PWA</div>
         </div>
     </div>
 
@@ -838,20 +838,20 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             <p class="text-sm text-primary font-bold tracking-widest uppercase mb-4">Founder and Developer</p>
             
             <p class="text-sm text-gray-400 leading-relaxed mb-6">
-                Architect and visionary behind <span class="text-white font-semibold">SecureVault V1.2 PWA</span>. Engineering bank-grade security into a seamless, high-performance web experience.
+                Architect and visionary behind <span class="text-white font-semibold">SecureVault V1.3 PWA</span>. Engineering bank-grade security into a seamless, high-performance web experience.
             </p>
             
             <div class="w-full h-px bg-gradient-to-r from-transparent via-dark-border to-transparent mb-6"></div>
             
             <div class="flex gap-4 items-center justify-center text-xs text-gray-500">
                 <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> Systems Active</span>
-                <span>v1.2.0</span>
+                <span>v1.3.0</span>
             </div>
         </div>
     </div>
 </div>
 
-<script src="js/dashboard.js?v=6"></script>
+<script src="js/dashboard.js?v=9"></script>
 <script src="js/pwa.js"></script>
 
 <!-- PWA Install Banner (Premium) -->
