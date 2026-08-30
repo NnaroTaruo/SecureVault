@@ -398,12 +398,210 @@ function hideSearchOverlay() {
     if (overlay) overlay.classList.add('hidden');
 }
 
-// ── 5. Add / Edit Account ─────────────────────────────────
+// ── 5. Add / Edit Account & Password Generator ────────────
+let currentGeneratedPassword = '';
+
+function generateSecureRandomPassword(length = 18, options = {}) {
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers   = '0123456789';
+    const symbols   = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+
+    const useUpper   = options.upper !== false;
+    const useNumbers = options.numbers !== false;
+    const useSymbols = options.symbols !== false;
+
+    let charPool = lowercase;
+    const guaranteedChars = [];
+
+    // Helper for secure random integer within range [0, max)
+    const getSecureRandomInt = (max) => {
+        const array = new Uint32Array(1);
+        window.crypto.getRandomValues(array);
+        return array[0] % max;
+    };
+
+    guaranteedChars.push(lowercase[getSecureRandomInt(lowercase.length)]);
+
+    if (useUpper) {
+        charPool += uppercase;
+        guaranteedChars.push(uppercase[getSecureRandomInt(uppercase.length)]);
+    }
+    if (useNumbers) {
+        charPool += numbers;
+        guaranteedChars.push(numbers[getSecureRandomInt(numbers.length)]);
+    }
+    if (useSymbols) {
+        charPool += symbols;
+        guaranteedChars.push(symbols[getSecureRandomInt(symbols.length)]);
+    }
+
+    const passwordArr = [...guaranteedChars];
+    const remainingLength = Math.max(0, length - guaranteedChars.length);
+
+    for (let i = 0; i < remainingLength; i++) {
+        passwordArr.push(charPool[getSecureRandomInt(charPool.length)]);
+    }
+
+    // Cryptographic Fisher-Yates shuffle
+    for (let i = passwordArr.length - 1; i > 0; i--) {
+        const j = getSecureRandomInt(i + 1);
+        const temp = passwordArr[i];
+        passwordArr[i] = passwordArr[j];
+        passwordArr[j] = temp;
+    }
+
+    return passwordArr.join('');
+}
+
+function togglePasswordGenerator() {
+    const panel = document.getElementById('passwordGeneratorPanel');
+    const toggleBtn = document.getElementById('toggleGenBtn');
+    if (!panel) return;
+
+    const isHidden = panel.classList.contains('hidden');
+    if (isHidden) {
+        panel.classList.remove('hidden');
+        if (toggleBtn) {
+            toggleBtn.classList.add('bg-primary', 'text-dark-bg');
+            toggleBtn.classList.remove('text-primary', 'bg-primary/10');
+        }
+        if (!currentGeneratedPassword) {
+            generateNewPassword();
+        }
+    } else {
+        panel.classList.add('hidden');
+        if (toggleBtn) {
+            toggleBtn.classList.remove('bg-primary', 'text-dark-bg');
+            toggleBtn.classList.add('text-primary', 'bg-primary/10');
+        }
+    }
+}
+
+function generateNewPassword() {
+    const lengthInput  = document.getElementById('genLength');
+    const upperInput   = document.getElementById('genUpper');
+    const numbersInput = document.getElementById('genNumbers');
+    const symbolsInput = document.getElementById('genSymbols');
+    const displayEl    = document.getElementById('generatedPasswordDisplay');
+    const strengthBadge= document.getElementById('genStrengthBadge');
+
+    const length = lengthInput ? parseInt(lengthInput.value, 10) : 18;
+    const options = {
+        upper: upperInput ? upperInput.checked : true,
+        numbers: numbersInput ? numbersInput.checked : true,
+        symbols: symbolsInput ? symbolsInput.checked : true
+    };
+
+    currentGeneratedPassword = generateSecureRandomPassword(length, options);
+    if (displayEl) {
+        displayEl.textContent = currentGeneratedPassword;
+    }
+
+    if (strengthBadge) {
+        let score = 0;
+        if (length >= 12) score++;
+        if (length >= 18) score++;
+        if (options.upper) score++;
+        if (options.numbers) score++;
+        if (options.symbols) score++;
+
+        if (score >= 4) {
+            strengthBadge.textContent = 'Very Strong';
+            strengthBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        } else if (score >= 3) {
+            strengthBadge.textContent = 'Strong';
+            strengthBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        } else {
+            strengthBadge.textContent = 'Moderate';
+            strengthBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30';
+        }
+    }
+}
+
+function applyGeneratedPassword() {
+    if (!currentGeneratedPassword) generateNewPassword();
+    const pwInput = document.getElementById('accountPassword');
+    if (!pwInput) return;
+
+    pwInput.value = currentGeneratedPassword;
+    pwInput.classList.add('border-primary', 'ring-2', 'ring-primary/40');
+    setTimeout(() => {
+        pwInput.classList.remove('ring-2', 'ring-primary/40');
+    }, 1200);
+
+    showAlert('Generated password applied to field!', 'success');
+}
+
+function copyGeneratedPassword() {
+    if (!currentGeneratedPassword) generateNewPassword();
+    if (!currentGeneratedPassword) return;
+
+    if (!navigator.clipboard) {
+        const ta = document.createElement('textarea');
+        ta.value = currentGeneratedPassword;
+        ta.style.position = 'fixed';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            showAlert('Generated password copied to clipboard!', 'success');
+        } catch {
+            showAlert('Copy failed', 'error');
+        }
+        document.body.removeChild(ta);
+        return;
+    }
+    navigator.clipboard.writeText(currentGeneratedPassword)
+        .then(() => showAlert('Generated password copied to clipboard!', 'success'))
+        .catch(() => showAlert('Copy failed', 'error'));
+}
+
+function toggleModalPasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+
+    if (btn) {
+        btn.innerHTML = isPassword ? `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/>
+            </svg>
+        ` : `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                         -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+        `;
+    }
+}
+
 function openAddAccountModal() {
     document.getElementById('accountId').value = '';
     document.getElementById('accountForm').reset();
-    document.getElementById('accountPassword').value = '';
+    const pwInput = document.getElementById('accountPassword');
+    if (pwInput) {
+        pwInput.value = '';
+        pwInput.type = 'password';
+    }
     document.getElementById('modalTitle').textContent = 'Add New Account';
+
+    // Reset generator panel
+    const panel = document.getElementById('passwordGeneratorPanel');
+    if (panel) panel.classList.add('hidden');
+    const toggleBtn = document.getElementById('toggleGenBtn');
+    if (toggleBtn) {
+        toggleBtn.classList.remove('bg-primary', 'text-dark-bg');
+        toggleBtn.classList.add('text-primary', 'bg-primary/10');
+    }
+    currentGeneratedPassword = '';
+
     openModal('accountModal');
 }
 
@@ -463,11 +661,27 @@ async function executeEditFetch(accountId, masterPassword) {
     document.getElementById('serviceName').value      = acc.service_name;
     document.getElementById('category').value         = acc.category_id || 0;
     document.getElementById('accountUsername').value  = acc.username;
-    document.getElementById('accountPassword').value  = decryptedPassword;
+    
+    const pwInput = document.getElementById('accountPassword');
+    if (pwInput) {
+        pwInput.value = decryptedPassword;
+        pwInput.type = 'password';
+    }
+
     document.getElementById('website').value          = acc.website_url || '';
     document.getElementById('notes').value            = acc.notes || '';
     document.getElementById('masterPassword').value   = masterPassword;
     document.getElementById('modalTitle').textContent = 'Edit Account';
+
+    // Reset generator panel on edit modal
+    const panel = document.getElementById('passwordGeneratorPanel');
+    if (panel) panel.classList.add('hidden');
+    const toggleBtn = document.getElementById('toggleGenBtn');
+    if (toggleBtn) {
+        toggleBtn.classList.remove('bg-primary', 'text-dark-bg');
+        toggleBtn.classList.add('text-primary', 'bg-primary/10');
+    }
+    currentGeneratedPassword = '';
 
     openModal('accountModal');
 }

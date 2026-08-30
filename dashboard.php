@@ -531,10 +531,101 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                               placeholder-gray-500 text-sm focus:outline-none focus:border-primary transition-all" required>
             </div>
             <div>
-                <label for="accountPassword" class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">Password *</label>
-                <input type="password" id="accountPassword" placeholder="••••••••"
-                       class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white
-                              placeholder-gray-500 text-sm focus:outline-none focus:border-primary transition-all" required>
+                <div class="flex items-center justify-between mb-2">
+                    <label for="accountPassword" class="block text-xs font-bold text-primary uppercase tracking-wider">Password *</label>
+                    <button type="button" onclick="togglePasswordGenerator()"
+                            id="toggleGenBtn"
+                            class="text-xs font-semibold text-primary hover:text-primary-dark flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        <span>Generate Password</span>
+                    </button>
+                </div>
+                <div class="relative">
+                    <input type="password" id="accountPassword" placeholder="••••••••"
+                           class="w-full pl-4 pr-11 py-3 bg-dark-bg border border-dark-border rounded-xl text-white
+                                  placeholder-gray-500 text-sm focus:outline-none focus:border-primary transition-all font-mono" required>
+                    <button type="button" onclick="toggleModalPasswordVisibility('accountPassword', this)"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors p-1"
+                            title="Show/Hide Password">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
+                                     -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Dedicated Generator Panel -->
+                <div id="passwordGeneratorPanel" class="hidden mt-3 p-3.5 bg-dark-bg/95 border border-primary/30 rounded-xl space-y-3 shadow-inner">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-primary tracking-wider uppercase flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                </svg>
+                                Password Generator
+                            </span>
+                            <span id="genStrengthBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Very Strong</span>
+                        </div>
+                        <button type="button" onclick="generateNewPassword()"
+                                class="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1 font-medium"
+                                title="Generate a new password">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span>Reroll</span>
+                        </button>
+                    </div>
+
+                    <!-- Password display card -->
+                    <div class="bg-dark-card border border-dark-border rounded-lg p-2.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                        <span id="generatedPasswordDisplay" class="font-mono text-xs sm:text-sm text-primary tracking-wider break-all select-all font-semibold flex-1"></span>
+                        <div class="flex items-center gap-1.5 self-end sm:self-center">
+                            <button type="button" onclick="copyGeneratedPassword()"
+                                    class="px-2.5 py-1.5 rounded-lg bg-dark-border/80 hover:bg-dark-border text-gray-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all border border-dark-border">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                <span>Copy</span>
+                            </button>
+                            <button type="button" onclick="applyGeneratedPassword()"
+                                    class="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-dark text-dark-bg text-xs font-bold flex items-center gap-1 transition-all shadow-sm">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span>Use Password</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Generator options -->
+                    <div class="space-y-2.5 pt-1 border-t border-dark-border/60">
+                        <div class="flex items-center justify-between text-xs text-gray-300">
+                            <span>Length: <strong id="genLengthVal" class="text-primary font-mono font-bold">18</strong></span>
+                            <input type="range" id="genLength" min="8" max="48" value="18"
+                                   oninput="document.getElementById('genLengthVal').textContent = this.value; generateNewPassword();"
+                                   class="w-36 accent-[#00E676] h-1.5 bg-dark-card rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <label class="flex items-center gap-1.5 cursor-pointer text-gray-300 select-none">
+                                <input type="checkbox" id="genUpper" checked onchange="generateNewPassword()" class="rounded border-dark-border text-primary focus:ring-0 accent-[#00E676]">
+                                <span class="text-[11px]">A-Z (Upper)</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 cursor-pointer text-gray-300 select-none">
+                                <input type="checkbox" id="genNumbers" checked onchange="generateNewPassword()" class="rounded border-dark-border text-primary focus:ring-0 accent-[#00E676]">
+                                <span class="text-[11px]">0-9 (Digits)</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 cursor-pointer text-gray-300 select-none">
+                                <input type="checkbox" id="genSymbols" checked onchange="generateNewPassword()" class="rounded border-dark-border text-primary focus:ring-0 accent-[#00E676]">
+                                <span class="text-[11px]">!@#$ (Symbols)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div>
                 <label for="website" class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">Website</label>
