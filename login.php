@@ -19,6 +19,12 @@ if (isLoggedIn() && verifySession()) {
 $flash        = getFlashMessage();
 $message      = $flash['message'];
 $messageType  = $flash['type'];
+
+if (empty($message) && isset($_GET['timeout'])) {
+    $message     = '🔒 Your session expired due to 5 minutes of inactivity. Please sign in again.';
+    $messageType = 'info';
+}
+
 $showRegister = isset($_GET['register']);
 ?>
 <!DOCTYPE html>
@@ -80,6 +86,26 @@ $showRegister = isset($_GET['register']);
 
         /* Smooth strength bar */
         #strengthBar { transition: width 0.3s ease, background-color 0.3s ease; }
+
+        /* Animated edge border glow */
+        @keyframes rotateBorder {
+            0%   { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .card-border-glow {
+            position: relative;
+            border-radius: 1.5rem; /* 24px */
+            padding: 1.5px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 230, 118, 0.12);
+        }
+        .card-border-glow::before {
+            content: '';
+            position: absolute;
+            inset: -150%;
+            background: conic-gradient(from 0deg, transparent 0deg 260deg, rgba(0, 230, 118, 0.25) 290deg, #00E676 340deg, #00C65E 360deg);
+            animation: rotateBorder 4.5s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-dark-bg bg-dots flex flex-col justify-between antialiased selection:bg-primary/20 selection:text-primary">
@@ -132,11 +158,12 @@ $showRegister = isset($_GET['register']);
                 </div>
             </div>
 
-            <!-- ===== AUTH CARD ===== -->
-            <div class="bg-dark-card/95 backdrop-blur-xl border border-dark-border rounded-3xl shadow-2xl overflow-hidden ring-1 ring-primary/20">
+            <!-- ===== AUTH CARD WITH ANIMATED EDGE GLOW ===== -->
+            <div class="card-border-glow">
+                <div class="relative bg-dark-card/95 backdrop-blur-xl border border-dark-border/80 rounded-[23px] shadow-2xl overflow-hidden ring-1 ring-primary/20">
 
-                <!-- Tab Selector (Sign In vs Create Account) -->
-                <div class="flex border-b border-dark-border bg-dark-surface/40">
+                    <!-- Tab Selector (Sign In vs Create Account) -->
+                    <div class="flex border-b border-dark-border bg-dark-surface/40">
                     <button id="tabLogin" type="button"
                             onclick="showTab('login')"
                             class="tab-btn flex-1 py-4 text-xs sm:text-sm font-bold border-b-2 transition-all
@@ -157,7 +184,9 @@ $showRegister = isset($_GET['register']);
                     <div class="p-3.5 rounded-xl text-xs font-semibold border-l-4
                                 <?php echo $messageType === 'error'
                                     ? 'bg-red-900/30 border-red-500 text-red-300'
-                                    : 'bg-green-900/30 border-green-500 text-green-300'; ?>">
+                                    : ($messageType === 'info'
+                                        ? 'bg-primary/10 border-primary text-primary'
+                                        : 'bg-green-900/30 border-green-500 text-green-300'); ?>">
                         <?php echo htmlspecialchars($message); ?>
                     </div>
                     <?php endif; ?>
@@ -301,6 +330,7 @@ $showRegister = isset($_GET['register']);
                     <svg class="w-3.5 h-3.5 text-primary" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                     <span>AES-256-GCM · PBKDF2 (100k) · Client-Side</span>
                 </div>
+            </div>
             </div>
 
             <!-- Why SecureVault Trust Highlights -->

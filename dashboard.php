@@ -111,6 +111,27 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 
         /* Button tap feedback */
         .tap-active:active { transform: scale(0.95); }
+
+        /* Profile & Avatar Animations in About App Modal */
+        @keyframes rotateLighting {
+            0%   { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes floatAvatar {
+            0%, 100% { transform: translateY(0px); }
+            50%      { transform: translateY(-7px); }
+        }
+        .animate-float {
+            animation: floatAvatar 3.5s ease-in-out infinite;
+        }
+
+        /* Vault Blur for Inactivity Auto-Lock */
+        .vault-blurred > *:not(#vaultLockOverlay) {
+            filter: blur(16px);
+            pointer-events: none !important;
+            user-select: none !important;
+            transition: filter 0.4s ease;
+        }
     </style>
 </head>
 <body class="bg-dark-bg">
@@ -757,13 +778,44 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                 </div>
                 <div>
                     <h2 class="text-base font-extrabold text-white tracking-tight">System Upgrade: What's New</h2>
-                    <p class="text-[11px] text-primary font-bold uppercase tracking-wider">SecureVault v1.3 PWA Release</p>
+                    <p class="text-[11px] text-primary font-bold uppercase tracking-wider">SecureVault v1.3 Enhanced Release</p>
                 </div>
             </div>
             <button onclick="closeUpdateNotice()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
         </div>
 
         <div class="p-6 space-y-3.5 max-h-[60vh] overflow-y-auto hide-scrollbar">
+            <!-- Feature: Inactivity Auto-Lock -->
+            <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-primary/30 flex gap-3 items-start shadow-sm">
+                <div class="w-8 h-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
+                    🔒
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-white mb-0.5 flex items-center gap-1.5">
+                        <span>5-Min Inactivity Auto-Lock</span>
+                        <span class="text-[9px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-bold uppercase">New</span>
+                    </h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        Idle for 5 minutes? The vault automatically blurs all data and securely logs out to protect your credentials from prying eyes.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Feature: Password Generator -->
+            <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-primary/30 flex gap-3 items-start shadow-sm">
+                <div class="w-8 h-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
+                    ⚡
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-white mb-0.5 flex items-center gap-1.5">
+                        <span>Built-in Password Generator</span>
+                        <span class="text-[9px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-bold uppercase">New</span>
+                    </h3>
+                    <p class="text-[11px] text-gray-400 leading-relaxed">
+                        Create high-entropy, cryptographically random passwords with custom length (8–48 chars) and character toggles inside the Add/Edit modal.
+                    </p>
+                </div>
+            </div>
             <!-- Feature 1: Offline Vault Access -->
             <div class="p-3.5 rounded-2xl bg-dark-bg/80 border border-dark-border flex gap-3 items-start">
                 <div class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm font-bold">
@@ -961,5 +1013,38 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
         </div>
     </div>
 </div>
+
+<!-- ===== INACTIVITY AUTO-LOCK OVERLAY ===== -->
+<div id="vaultLockOverlay"
+     class="hidden fixed inset-0 z-[999] flex flex-col items-center justify-center p-4
+            bg-dark-bg/85 backdrop-blur-2xl transition-all duration-500">
+    <div class="bg-dark-card/95 border border-primary/40 p-8 rounded-3xl max-w-md w-full text-center shadow-[0_0_60px_rgba(0,230,118,0.2)] space-y-5 modal-anim relative overflow-hidden">
+        <div class="w-16 h-16 rounded-2xl bg-primary/15 border border-primary/30 text-primary flex items-center justify-center mx-auto shadow-lg shadow-primary/20">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+        </div>
+        <div>
+            <h2 class="text-xl font-black text-white mb-2 tracking-tight">Vault Locked</h2>
+            <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                You were inactive for 5 minutes. Your vault has been blurred and locked to protect your credentials from prying eyes.
+            </p>
+        </div>
+        <div class="pt-2">
+            <a href="login.php?timeout=1"
+               class="inline-flex items-center justify-center gap-2 w-full py-3.5 px-4 bg-primary hover:bg-primary-dark text-dark-bg font-extrabold rounded-xl transition-all shadow-lg shadow-primary/25 text-sm active:scale-95">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                </svg>
+                <span>Unlock / Sign In Again</span>
+            </a>
+        </div>
+        <div class="text-[11px] text-gray-500 font-mono">
+            Zero-Knowledge Security Active
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
