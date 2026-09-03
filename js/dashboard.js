@@ -1025,8 +1025,109 @@ document.addEventListener('keydown', e => {
 
 function closeUpdateNotice() {
     closeModal('updateNoticeModal');
+    localStorage.setItem('seen_update_v1_3_enhanced', 'true');
     localStorage.setItem('seen_update_v1_3', 'true');
 }
+
+// ── 11. Inactivity Auto-Lock & Privacy Blur Engine ─────────
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const INACTIVITY_WARNING_MS = 30 * 1000;     // 30 seconds warning before lock
+let inactivityTimer = null;
+let inactivityWarningTimer = null;
+let lastActivityReset = 0;
+let isVaultLocked = false;
+
+function initInactivityTracker() {
+    const resetTimer = () => {
+        if (isVaultLocked) return;
+        const now = Date.now();
+        // Throttle activity resets to once per 1000ms
+        if (now - lastActivityReset < 1000) return;
+        lastActivityReset = now;
+
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        if (inactivityWarningTimer) clearTimeout(inactivityWarningTimer);
+
+        // Warning timer at 4.5 minutes (30s before lock)
+        inactivityWarningTimer = setTimeout(() => {
+            if (!isVaultLocked) {
+                showAlert('⚠️ Inactivity Warning: Vault auto-locking in 30s. Move mouse or press any key.', 'warning');
+            }
+        }, INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS);
+
+        // Lock timer at 5 minutes
+        inactivityTimer = setTimeout(() => {
+            triggerInactivityLock();
+        }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    // User interaction events
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach(ev => {
+        window.addEventListener(ev, resetTimer, { passive: true });
+    });
+
+    // Start initial timer
+    resetTimer();
+}
+
+function triggerInactivityLock() {
+    if (isVaultLocked) return;
+    isVaultLocked = true;
+
+    // 1. Clear any active inactivity timers
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    if (inactivityWarningTimer) clearTimeout(inactivityWarningTimer);
+
+    // 2. Immediately blur all background elements to protect from prying eyes
+    document.body.classList.add('vault-blurred');
+
+    // 3. Clear all visible plaintext passwords on cards immediately
+    document.querySelectorAll('[class*="password-display-"]').forEach(el => {
+        el.textContent = '••••••••••••';
+        el.classList.add('password-masked', 'pw-dots');
+        el.style.color = '';
+        el.style.letterSpacing = '';
+        el.style.fontSize = '';
+    });
+
+    // Clear active password reveal timeouts
+    if (typeof revealTimers === 'object' && revealTimers) {
+        Object.keys(revealTimers).forEach(id => {
+            clearTimeout(revealTimers[id]);
+            delete revealTimers[id];
+        });
+    }
+
+    // 4. Close any open dialogs and wipe in-memory sensitive inputs
+    ['masterKeyModal', 'accountModal', 'settingsModal', 'logoutModal', 'aboutModal', 'updateNoticeModal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+
+    const masterPassPrompt = document.getElementById('promptMasterKey');
+    if (masterPassPrompt) masterPassPrompt.value = '';
+    const masterPassModal = document.getElementById('masterPassword');
+    if (masterPassModal) masterPassModal.value = '';
+    const accountPassModal = document.getElementById('accountPassword');
+    if (accountPassModal) accountPassModal.value = '';
+
+    // 5. Display the unblurred Vault Lock Screen
+    const lockOverlay = document.getElementById('vaultLockOverlay');
+    if (lockOverlay) {
+        lockOverlay.classList.remove('hidden');
+    }
+
+    // 6. Asynchronously terminate server session
+    try {
+        fetch('api/auth.php?action=logout', { method: 'GET', keepalive: true }).catch(() => {});
+    } catch (e) {
+        console.warn('Inactivity logout request error:', e);
+    }
+}
+
+// Developer / Automated testing hook
+window.__triggerInactivityLock = triggerInactivityLock;
 
 // Network status listeners
 window.addEventListener('online', () => {
@@ -1044,11 +1145,13 @@ window.addEventListener('offline', () => {
 window.addEventListener('DOMContentLoaded', () => {
     updateStatusPill(navigator.onLine);
     syncVaultFromNetwork();
+    initInactivityTracker();
 
-    // Show update notice modal on first visit of v1.3
-    if (!localStorage.getItem('seen_update_v1_3')) {
+    // Show update notice modal on first visit of enhanced release
+    if (!localStorage.getItem('seen_update_v1_3_enhanced')) {
         setTimeout(() => {
             openModal('updateNoticeModal');
         }, 500);
     }
 });
+

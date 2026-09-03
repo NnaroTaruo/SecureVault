@@ -7,9 +7,11 @@ database.sql
 # Deployment artifacts
 deploy.zip
 
-# XAMPP / Server logs
+# XAMPP / Server logs & debug outputs
 *.log
 error_log
+api/debug.txt
+debug.txt
 
 # OS junk files
 .DS_Store
