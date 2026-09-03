@@ -982,28 +982,61 @@ function copyUserClipboard(text) {
         .catch(() => showAlert('Copy failed', 'error'));
 }
 
-function handleSettingsSubmit(event) {
+async function handleSettingsSubmit(event) {
     event.preventDefault();
     const oldKey = document.getElementById('oldPassword').value;
     const newKey = document.getElementById('newPassword').value;
     const confirmKey = document.getElementById('confirmNewPassword').value;
     if (newKey !== confirmKey) { showAlert('New master keys do not match', 'error'); return; }
-
-    fetch('api/auth.php?action=update_master_password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ action: 'update_master_password', old_password: oldKey, new_password: newKey })
-    })
-    .then(r => r.json())
-    .then(data => {
+    if (!navigator.onLine) {
+        showAlert('Cannot update master password while offline.', 'warning');
+        return;
+    }
+    try {
+        const salt = await getEffectiveSalt();
+        const oldCryptoKey = await deriveKey(oldKey, salt);
+        const newCryptoKey = await deriveKey(newKey, salt);
+        const accounts = await VaultDB.getAll();
+        const updatedAccounts = [];
+        for (const acc of accounts) {
+            if (acc.password_encrypted) {
+                const plaintext = await decryptPasswordLocal(acc.password_encrypted, oldCryptoKey);
+                if (plaintext === null) {
+                    showAlert('Current master password is incorrect or vault is corrupted.', 'error');
+                    return;
+                }
+                const newEncrypted = await encryptPasswordLocal(plaintext, newCryptoKey);
+                updatedAccounts.push({
+                    id: acc.id,
+                    password_encrypted: newEncrypted
+                });
+            }
+        }
+        const response = await fetch('api/auth.php?action=update_master_password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                action: 'update_master_password',
+                old_password: oldKey,
+                new_password: newKey,
+                accounts: JSON.stringify(updatedAccounts)
+            })
+        });
+        const data = await response.json();
         if (data.success) {
             showAlert('Master Key updated successfully!', 'success');
             closeModal('settingsModal');
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmNewPassword').value = '';
+            syncVaultFromNetwork();
         } else {
             showAlert(data.message || 'Update failed', 'error');
         }
-    })
-    .catch(() => showAlert('Network error', 'error'));
+    } catch (e) {
+        console.error(e);
+        showAlert('An error occurred during update', 'error');
+    }
 }
 
 // ── 10. Listeners & Initialization ─────────────────────────

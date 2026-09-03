@@ -211,7 +211,7 @@ function requireLogin() {
 /**
  * Update master password
  */
-function updateMasterPassword($userId, $oldPassword, $newPassword) {
+function updateMasterPassword($userId, $oldPassword, $newPassword, $accounts = null) {
     $db = Database::getInstance()->getConnection();
     
     // Get current password hash
@@ -235,12 +235,41 @@ function updateMasterPassword($userId, $oldPassword, $newPassword) {
     }
     
     $newHash = hashPassword($newPassword);
-    $stmt = $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
-    $stmt->bind_param('si', $newHash, $userId);
     
-    if ($stmt->execute()) {
+    // Start transaction for atomic update
+    $db->begin_transaction();
+
+    try {
+        $stmt = $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+        $stmt->bind_param('si', $newHash, $userId);
+
+        if (!$stmt->execute()) {
+            throw new Exception('Failed to update password hash');
+        }
+
+        // Update encrypted passwords if provided
+        if ($accounts !== null && is_array($accounts)) {
+            $updateStmt = $db->prepare('UPDATE accounts SET password_encrypted = ?, updated_at = NOW() WHERE id = ? AND user_id = ?');
+
+            foreach ($accounts as $acc) {
+                if (!isset($acc['id']) || !isset($acc['password_encrypted'])) {
+                    continue; // Skip invalid entries
+                }
+
+                $accountId = (int)$acc['id'];
+                $encryptedPassword = $acc['password_encrypted'];
+
+                $updateStmt->bind_param('sii', $encryptedPassword, $accountId, $userId);
+                if (!$updateStmt->execute()) {
+                    throw new Exception('Failed to update an account');
+                }
+            }
+        }
+
+        $db->commit();
         return ['success' => true, 'message' => 'Master password updated successfully'];
-    } else {
-        return ['success' => false, 'message' => 'Failed to update password'];
+    } catch (Exception $e) {
+        $db->rollback();
+        return ['success' => false, 'message' => 'Failed to update password: ' . $e->getMessage()];
     }
 }
