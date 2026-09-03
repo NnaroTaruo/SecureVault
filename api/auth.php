@@ -105,10 +105,18 @@ switch ($action) {
             jsonResponse(false, 'Not authenticated', null, 401);
         }
         
+
         $oldPassword = $_POST['old_password'] ?? '';
         $newPassword = $_POST['new_password'] ?? '';
         
-        $result = updateMasterPassword(getCurrentUserId(), $oldPassword, $newPassword);
+        // Parse accounts if provided
+        $accounts = null;
+        if (isset($_POST['accounts']) && !empty($_POST['accounts'])) {
+            $accounts = json_decode($_POST['accounts'], true);
+        }
+
+        $result = updateMasterPassword(getCurrentUserId(), $oldPassword, $newPassword, $accounts);
+
         $statusCode = $result['success'] ? 200 : 400;
         jsonResponse($result['success'], $result['message'], null, $statusCode);
         break;
