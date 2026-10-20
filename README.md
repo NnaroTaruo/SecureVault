@@ -15,7 +15,7 @@
 * 🛡️ **Zero-Knowledge Cryptography**: Master keys and plaintext passwords never touch the server. Cryptographic keys are derived and decrypted exclusively in-memory inside your web browser.
 * ⚡ **AES-256-GCM + PBKDF2**: Key stretching with 100,000 iterations of SHA-256 and authenticated Galois/Counter Mode encryption with unique 12-byte initialization vectors (IVs).
 * 📱 **Installable Progressive Web App (PWA)**: Install directly to iOS, Android, macOS, or Windows for a fast, native desktop/mobile vault experience with offline asset caching.
-* 🧪 **Interactive WebCrypto Playground**: Built-in cryptographic sandbox on the landing page for real-time inspection of client-side key derivation and ciphertext generation.
+* 🧭 **Simple Getting Started Guide**: A focused landing page with account access, three setup steps, and answers about master keys, offline access, and installation.
 * 🔎 **Instant Vault Search & Categorization**: Fast client-side filtering by service name, username, or custom categories (Gaming, University, Financial, Work, etc.).
 * 🛡️ **Anti-Phishing Safeguards**: Origin validation banners preventing users from falling for unauthorized spoofed clones.
 
@@ -63,7 +63,7 @@ SecureVault/
 ├── auth.php                  # Authentication backend logic
 ├── accounts.php              # Vault accounts backend logic
 ├── functions.php             # WebCrypto & cryptographic helpers
-├── index.php                 # Official Product Landing Page & Sandbox
+├── index.php                 # Product landing page & getting started guide
 ├── login.php                 # Master Gateway (Sign In / Account Creation)
 ├── dashboard.php             # Vault Application Dashboard
 ├── maintenance.php           # 503 Scheduled Maintenance View
