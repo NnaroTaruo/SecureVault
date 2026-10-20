@@ -68,21 +68,44 @@ $userLoggedIn = isLoggedIn() && verifySession();
         .vault-scene { display: block; width: 100%; height: auto; overflow: visible; }
         .vault-scene text { font-family: 'Inter', sans-serif; }
         .motion-card-title { fill: var(--text); font-size: 14px; font-weight: 500; }
-        .motion-card-password { fill: var(--muted); font-size: 13px; letter-spacing: 3px; }
-        .motion-route { fill: none; stroke: #31584F; stroke-width: 1; }
-        .motion-flow { fill: none; stroke: #6CF0B1; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 4 40; }
+        .motion-card-password { fill: #C3D4CD; font-size: 15px; letter-spacing: 3px; }
+        .motion-plain { opacity: 0; letter-spacing: 0.5px; }
+        .motion-phase { fill: #B8D5C8; font-size: 15px; font-weight: 500; }
+        .motion-phase-save, .motion-phase-locked, .motion-saved { opacity: 0; }
         .motion-core-label { fill: #A3D8C5; font-size: 11px; font-weight: 600; letter-spacing: 3px; }
-        .motion-controls { display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 44px; }
+        .motion-controls { display: flex; align-items: center; justify-content: flex-end; min-height: 44px; }
         figcaption { color: var(--muted); font-size: 12px; }
-        .motion-toggle { min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--text); font-size: 12px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
-        .motion-toggle:hover { color: var(--green); }
+        .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+        .motion-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; padding: 12px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+        .motion-toggle:hover { color: var(--green); border-color: var(--green); }
+        .motion-toggle .motion-icon { display: block; width: 18px; height: 18px; }
         .motion-toggle[hidden] { display: none; }
         .getting-started { border-top: 1px solid var(--line); padding-block: 56px 64px; }
         h2 { font-size: clamp(26px, 3vw, 32px); font-weight: 600; line-height: 1.25; letter-spacing: -0.025em; text-wrap: balance; }
-        .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin: 32px 0 0; padding: 0; list-style: none; counter-reset: step; }
-        .steps li { counter-increment: step; }
+        .walkthrough-intro { margin-top: 12px; color: var(--muted); font-size: 14px; }
+        .walkthrough { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 64px; margin-top: 32px; }
+        .walkthrough-preview { position: sticky; top: 24px; margin: 0; min-width: 0; }
+        .walkthrough-preview svg { display: block; width: 100%; height: auto; }
+        .walkthrough-preview text { font-family: 'Inter', sans-serif; }
+        .demo-title { fill: var(--text); font-size: 16px; font-weight: 600; }
+        .demo-text { fill: #C3D4CD; font-size: 14px; }
+        .demo-search-query, .demo-password, .demo-key, .demo-saved { opacity: 0; }
+        .walkthrough-preview[data-step="save"] .demo-saved,
+        .walkthrough-preview:is([data-step="find"], [data-step="reveal"]) .demo-search-query { opacity: 1; }
+        .walkthrough-preview:is([data-step="find"], [data-step="reveal"]) .demo-placeholder { opacity: 0; }
+        .walkthrough-preview:is([data-step="find"], [data-step="reveal"]) .demo-other { opacity: 0.25; }
+        .walkthrough-preview:is([data-step="find"], [data-step="reveal"]) .demo-selected { stroke: var(--green); }
+        .walkthrough-preview[data-step="reveal"] .demo-mask { opacity: 0; }
+        .walkthrough-preview[data-step="reveal"] .demo-password,
+        .walkthrough-preview[data-step="reveal"] .demo-key { opacity: 1; }
+        .steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+        .steps li { counter-increment: step; min-height: 220px; padding-block: 28px; border-bottom: 1px solid var(--line); }
+        .steps li:last-child { border-bottom: 0; }
         .steps li::before { content: counter(step) "."; display: block; margin-bottom: 12px; color: var(--green); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
         h3 { margin-bottom: 8px; font-size: 17px; font-weight: 600; }
+        .step-trigger { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 5px; }
+        .step-trigger[aria-pressed="true"] { color: var(--green); }
+        .step-trigger:disabled { cursor: default; text-decoration: none; }
         .steps p { max-width: 32ch; color: var(--muted); font-size: 14px; }
         .faq { display: grid; grid-template-columns: 1fr 1.4fr; gap: 64px; padding-block: 56px 64px; border-top: 1px solid var(--line); }
         .faq-intro { margin-top: 12px; max-width: 25ch; color: var(--muted); font-size: 14px; }
@@ -106,37 +129,44 @@ $userLoggedIn = isLoggedIn() && verifySession();
         .dismiss-install svg { width: 20px; height: 20px; }
         .hidden { display: none; }
         .flex { display: flex; }
-        /* The illustration stays complete without JavaScript; visible motion is opt-in. */
+        /* One shared timeline: mask the sample, move the card, then close the vault. */
+        /* Without JavaScript or with reduced motion, the masked card and closed vault stay visible. */
         @media (prefers-reduced-motion: no-preference) {
-            @keyframes vault-orbit {
-                to { transform: rotate(360deg); }
+            @keyframes vault-card-save {
+                0%, 26%, 100% { transform: none; opacity: 1; }
+                48% { transform: translateX(238px) scale(0.36); opacity: 1; }
+                53%, 86% { transform: translateX(238px) scale(0.36); opacity: 0; }
+                87% { transform: none; opacity: 0; }
+                94% { transform: none; opacity: 1; }
             }
-            @keyframes vault-card-float {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-7px); }
-            }
-            @keyframes vault-data-flow {
-                to { stroke-dashoffset: -88; }
+            @keyframes vault-password-plain { 0%, 9%, 100% { opacity: 1; } 18%, 94% { opacity: 0; } }
+            @keyframes vault-password-masked { 0%, 9%, 100% { opacity: 0; } 18%, 94% { opacity: 1; } }
+            @keyframes vault-door-close {
+                0%, 42%, 100% { transform: scaleX(0.22) skewY(-9deg); }
+                57%, 85% { transform: none; }
             }
             @keyframes vault-shackle-close {
-                0%, 8%, 100% { transform: translateY(-9px) rotate(12deg); }
-                22%, 86% { transform: translateY(0) rotate(0); }
+                0%, 54%, 100% { transform: translateY(-8px) rotate(12deg); }
+                66%, 85% { transform: none; }
             }
-            @keyframes vault-seal {
-                0%, 14% { stroke-dashoffset: 480; }
-                44%, 86% { stroke-dashoffset: 0; }
-                100% { stroke-dashoffset: -480; }
-            }
-            .motion-enabled .motion-orbit { transform-origin: 250px 222px; animation: vault-orbit 22s linear infinite; }
-            .motion-enabled .motion-orbit-inner { animation-duration: 32s; animation-direction: reverse; }
-            .motion-enabled .motion-card { animation: vault-card-float 6s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
-            .motion-enabled .motion-card-work { animation-delay: -2s; }
-            .motion-enabled .motion-card-shopping { animation-delay: -4s; }
-            .motion-enabled .motion-flow { animation: vault-data-flow 2.4s linear infinite; }
-            .motion-enabled .motion-shackle { transform-origin: 268px 220px; animation: vault-shackle-close 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
-            .motion-enabled .motion-seal { stroke-dasharray: 480; animation: vault-seal 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+            @keyframes vault-saved { 0%, 62%, 91%, 100% { opacity: 0; } 68%, 84% { opacity: 1; } }
+            @keyframes vault-phase-mask { 0%, 24%, 96%, 100% { opacity: 1; } 28%, 92% { opacity: 0; } }
+            @keyframes vault-phase-save { 0%, 24%, 59%, 100% { opacity: 0; } 28%, 55% { opacity: 1; } }
+            @keyframes vault-phase-locked { 0%, 55%, 94%, 100% { opacity: 0; } 59%, 89% { opacity: 1; } }
+            .motion-enabled { --vault-cycle: 10s; }
+            .motion-enabled .motion-layer { animation-duration: var(--vault-cycle); animation-iteration-count: infinite; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+            .motion-enabled .motion-card { transform-origin: 122px 222px; animation-name: vault-card-save; }
+            .motion-enabled .motion-plain { animation-name: vault-password-plain; }
+            .motion-enabled .motion-mask { animation-name: vault-password-masked; }
+            .motion-enabled .motion-door { transform-origin: 272px 240px; animation-name: vault-door-close; }
+            .motion-enabled .motion-shackle { transform-origin: 382px 226px; animation-name: vault-shackle-close; }
+            .motion-enabled .motion-saved { animation-name: vault-saved; }
+            .motion-enabled .motion-phase-mask { animation-name: vault-phase-mask; }
+            .motion-enabled .motion-phase-save { animation-name: vault-phase-save; }
+            .motion-enabled .motion-phase-locked { animation-name: vault-phase-locked; }
             .vault-preview .motion-layer { animation-play-state: paused; }
             .vault-preview.motion-running .motion-layer { animation-play-state: running; }
+            .walkthrough-preview.motion-running .demo-state { transition: opacity 280ms ease-out, stroke 280ms ease-out; }
             .button svg, summary svg { transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1); }
             .button:is(:hover, :focus-visible) svg { transform: translateX(3px); }
         }
@@ -145,7 +175,10 @@ $userLoggedIn = isLoggedIn() && verifySession();
             h1 { max-width: 12ch; }
             .hero-copy { max-width: 42ch; font-size: 17px; }
             .vault-preview { width: 100%; max-width: 480px; }
-            .steps { gap: 24px; }
+            .walkthrough { grid-template-columns: 1fr; gap: 16px; }
+            .walkthrough-preview { top: 0; z-index: 2; padding-block: 12px; background: var(--bg); }
+            .walkthrough-preview svg { max-height: 220px; }
+            .steps li { min-height: 220px; }
             .faq { grid-template-columns: 1fr; gap: 28px; }
             .faq-intro { max-width: none; }
         }
@@ -161,9 +194,10 @@ $userLoggedIn = isLoggedIn() && verifySession();
             .hero-actions { margin-top: 28px; gap: 20px; }
             .hero-actions .button { width: 100%; }
             .getting-started, .faq { padding-block: 40px; }
-            .steps { grid-template-columns: 1fr; gap: 24px; margin-top: 28px; }
+            .walkthrough { margin-top: 24px; }
+            .walkthrough-preview svg { max-height: 200px; }
             .steps li { position: relative; padding-left: 32px; }
-            .steps li::before { position: absolute; top: 2px; left: 0; }
+            .steps li::before { position: absolute; top: 38px; left: 0; }
             .steps p { max-width: none; }
             .footer-inner { flex-direction: column; gap: 16px; }
             .install-banner { right: 20px; bottom: 20px; width: calc(100% - 40px); }
@@ -206,10 +240,11 @@ $userLoggedIn = isLoggedIn() && verifySession();
                 <p class="hero-note">Free to use. Works in your browser.</p>
             </div>
 
+            <!-- SVG draws the example; the CSS keyframes above supply its movement. -->
             <figure id="vaultMotion" class="vault-preview" aria-labelledby="preview-caption">
                 <svg class="vault-scene" viewBox="0 0 500 440" width="500" height="440" role="img" aria-labelledby="motion-title" aria-describedby="motion-description">
-                    <title id="motion-title">Your logins, together in a vault</title>
-                    <desc id="motion-description">Three example login cards surround a central lock, connected by moving trails and orbiting rings. This is an illustration.</desc>
+                    <title id="motion-title">A sample password moves into your vault</title>
+                    <desc id="motion-description">An illustrative sequence masks a sample password, moves its login card into a vault, and closes the lock. It uses example data only.</desc>
                     <defs>
                         <radialGradient id="vault-light">
                             <stop stop-color="#17483B" stop-opacity="0.65"/>
@@ -219,87 +254,116 @@ $userLoggedIn = isLoggedIn() && verifySession();
                             <stop stop-color="#1B3D3A"/>
                             <stop offset="1" stop-color="#0F1C2A"/>
                         </linearGradient>
-                        <linearGradient id="vault-orbit-light" x1="0" y1="0" x2="1" y2="1">
-                            <stop stop-color="#00E676"/>
-                            <stop offset="1" stop-color="#00E676" stop-opacity="0.1"/>
-                        </linearGradient>
                     </defs>
 
-                    <ellipse cx="250" cy="222" rx="210" ry="195" fill="url(#vault-light)"/>
-                    <circle cx="250" cy="222" r="166" fill="none" stroke="#233D44"/>
-                    <circle cx="250" cy="222" r="130" fill="none" stroke="#1C313D" stroke-dasharray="2 10"/>
-                    <g class="motion-orbit motion-layer">
-                        <circle cx="250" cy="222" r="166" fill="none" stroke="url(#vault-orbit-light)" stroke-width="2" stroke-linecap="round" stroke-dasharray="100 943"/>
-                        <circle cx="416" cy="222" r="4" fill="#75F4B7"/>
-                        <circle cx="84" cy="222" r="2.5" fill="#427D6C"/>
+                    <ellipse cx="345" cy="226" rx="180" ry="180" fill="url(#vault-light)"/>
+                    <path d="M42 222h392" fill="none" stroke="#31584F" stroke-dasharray="3 9"/>
+                    <rect x="254" y="116" width="220" height="234" rx="24" fill="#142630" stroke="#366D5C"/>
+                    <rect x="270" y="132" width="188" height="202" rx="14" fill="#080E1A" stroke="#2B514A"/>
+                    <g fill="#223E36">
+                        <rect x="296" y="164" width="136" height="34" rx="6"/>
+                        <rect x="296" y="210" width="136" height="34" rx="6"/>
+                        <rect x="296" y="256" width="136" height="34" rx="6"/>
                     </g>
-                    <g class="motion-orbit motion-orbit-inner motion-layer">
-                        <circle cx="250" cy="222" r="130" fill="none" stroke="#3B8D72" stroke-linecap="round" stroke-dasharray="48 769"/>
-                        <circle cx="380" cy="222" r="3" fill="#58C99C"/>
-                    </g>
+                    <path d="M310 181h47m-47 46h66m-66 46h35" stroke="#8CBBA7" stroke-width="3" stroke-linecap="round"/>
 
-                    <path class="motion-route" d="M180 136C217 136 204 194 225 211"/>
-                    <path class="motion-route" d="M326 207C302 207 297 225 278 236"/>
-                    <path class="motion-route" d="M221 348C265 348 269 302 259 272"/>
-                    <path class="motion-flow motion-layer" d="M180 136C217 136 204 194 225 211"/>
-                    <path class="motion-flow motion-layer" d="M326 207C302 207 297 225 278 236"/>
-                    <path class="motion-flow motion-layer" d="M221 348C265 348 269 302 259 272"/>
-
-                    <g>
-                        <polygon points="250,143 318,182 318,260 250,300 182,260 182,182" fill="url(#vault-metal)" stroke="#366D5C"/>
-                        <polygon class="motion-seal motion-layer" points="250,143 318,182 318,260 250,300 182,260 182,182" fill="none" stroke="#66E8AD" stroke-width="2" stroke-linejoin="round"/>
-                        <polygon points="250,158 305,190 305,252 250,285 195,252 195,190" fill="none" stroke="#2B514A"/>
-                        <path class="motion-shackle motion-layer" d="M232 222V204a18 18 0 0 1 36 0v18" fill="none" stroke="#B0F7D3" stroke-width="5" stroke-linecap="round"/>
-                        <rect x="222" y="220" width="56" height="43" rx="10" fill="#00E676"/>
-                        <circle cx="250" cy="237" r="4" fill="#103428"/>
-                        <path d="M250 240v7" stroke="#103428" stroke-width="3" stroke-linecap="round"/>
-                        <text class="motion-core-label" x="251" y="279" text-anchor="middle">VAULT</text>
-                    </g>
-
+                    <!-- The card is a separate SVG group, so CSS can move it as one piece. -->
                     <g class="motion-card motion-layer">
-                        <rect x="24" y="102" width="156" height="66" rx="12" fill="#142630" stroke="#34504D"/>
-                        <rect x="38" y="119" width="32" height="32" rx="8" fill="#244137"/>
+                        <rect x="26" y="166" width="192" height="112" rx="14" fill="#142630" stroke="#527D6C"/>
+                        <rect x="42" y="183" width="32" height="32" rx="8" fill="#244137"/>
                         <g fill="none" stroke="#96E6BE" stroke-width="1.5" stroke-linejoin="round">
-                            <rect x="44" y="128" width="20" height="14" rx="2"/>
-                            <path d="m45 129 9 7 9-7"/>
+                            <rect x="48" y="192" width="20" height="14" rx="2"/>
+                            <path d="m49 193 9 7 9-7"/>
                         </g>
-                        <text class="motion-card-title" x="82" y="130">Email</text>
-                        <text class="motion-card-password" x="82" y="150">••••••</text>
+                        <text class="motion-card-title" x="86" y="204">Sample login</text>
+                        <text class="motion-card-password motion-plain motion-layer" x="43" y="249">DemoPass24!</text>
+                        <text class="motion-card-password motion-mask motion-layer" x="43" y="249">••••••••••</text>
                     </g>
-                    <g class="motion-card motion-card-work motion-layer">
-                        <rect x="326" y="174" width="150" height="66" rx="12" fill="#142630" stroke="#34504D"/>
-                        <rect x="340" y="191" width="32" height="32" rx="8" fill="#244137"/>
-                        <g fill="none" stroke="#96E6BE" stroke-width="1.5" stroke-linejoin="round">
-                            <rect x="346" y="201" width="20" height="14" rx="2"/>
-                            <path d="M352 201v-4h8v4m-14 7h20m-10-2v4"/>
-                        </g>
-                        <text class="motion-card-title" x="384" y="202">Work</text>
-                        <text class="motion-card-password" x="384" y="222">••••••</text>
+
+                    <g class="motion-door motion-layer">
+                        <rect x="272" y="132" width="186" height="202" rx="14" fill="url(#vault-metal)" stroke="#72B99B" stroke-width="1.5"/>
+                        <rect x="285" y="145" width="160" height="176" rx="9" fill="none" stroke="#2E594D"/>
+                        <path class="motion-shackle motion-layer" d="M346 228v-18a18 18 0 0 1 36 0v18" fill="none" stroke="#B0F7D3" stroke-width="5" stroke-linecap="round"/>
+                        <rect x="336" y="226" width="56" height="43" rx="10" fill="#00E676"/>
+                        <circle cx="364" cy="243" r="4" fill="#103428"/>
+                        <path d="M364 246v7" stroke="#103428" stroke-width="3" stroke-linecap="round"/>
+                        <text class="motion-core-label" x="365" y="295" text-anchor="middle">VAULT</text>
                     </g>
-                    <g class="motion-card motion-card-shopping motion-layer">
-                        <rect x="59" y="315" width="162" height="66" rx="12" fill="#142630" stroke="#34504D"/>
-                        <rect x="73" y="332" width="32" height="32" rx="8" fill="#244137"/>
-                        <g fill="none" stroke="#96E6BE" stroke-width="1.5" stroke-linejoin="round">
-                            <path d="M80 343h18l-1 14H81l-1-14Zm4 0v-3a5 5 0 0 1 10 0v3"/>
-                        </g>
-                        <text class="motion-card-title" x="117" y="343">Shopping</text>
-                        <text class="motion-card-password" x="117" y="363">••••••</text>
+                    <g class="motion-saved motion-layer">
+                        <circle cx="446" cy="129" r="18" fill="#00E676"/>
+                        <path d="m438 129 5 5 10-11" fill="none" stroke="#103428" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
+                    <text class="motion-phase motion-phase-mask motion-layer" x="250" y="393" text-anchor="middle">Mask your password</text>
+                    <text class="motion-phase motion-phase-save motion-layer" x="250" y="393" text-anchor="middle">Save the encrypted login</text>
+                    <text class="motion-phase motion-phase-locked motion-layer" x="250" y="393" text-anchor="middle">Saved in your vault</text>
                 </svg>
                 <figcaption class="motion-controls">
-                    <span id="preview-caption">Illustrative vault animation</span>
-                    <button id="motionToggle" class="motion-toggle" type="button" hidden>Pause animation</button>
+                    <span id="preview-caption" class="sr-only">Example data · illustrative animation</span>
+                    <button id="motionToggle" class="motion-toggle" type="button" aria-label="Pause animation" title="Pause animation" data-motion-toggle hidden>
+                        <svg class="motion-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+                    </button>
                 </figcaption>
             </figure>
         </section>
 
         <section id="how-it-works" class="getting-started" aria-labelledby="steps-title">
-            <h2 id="steps-title" data-scroll-reveal>Three steps to your first saved password.</h2>
-            <ol class="steps">
-                <li data-scroll-reveal><h3>Create your account</h3><p>Choose a master key. You’ll use it to sign in and unlock your passwords.</p></li>
-                <li data-scroll-reveal data-reveal-delay="90"><h3>Add your logins</h3><p>Save a username and password. Account passwords are encrypted in your browser before saving.</p></li>
-                <li data-scroll-reveal data-reveal-delay="180"><h3>Find what you need</h3><p>Search or browse by category, then enter your master key to reveal a password.</p></li>
-            </ol>
+            <h2 id="steps-title" data-scroll-reveal>Save it. Find it. Unlock it.</h2>
+            <p class="walkthrough-intro">Scroll or select a step to see an example.</p>
+            <div class="walkthrough">
+                <figure id="walkthroughScene" class="walkthrough-preview" data-step="save" aria-labelledby="walkthrough-caption">
+                    <svg viewBox="0 0 500 340" width="500" height="340" role="img" aria-labelledby="walkthrough-title" aria-describedby="walkthrough-description">
+                        <title id="walkthrough-title">An example login in SecureVault</title>
+                        <desc id="walkthrough-description">An illustrative vault shows a saved email login, a search for Email, and a sample password revealed after entering a master key. It does not use real account data.</desc>
+                        <rect x="22" y="16" width="456" height="306" rx="16" fill="#0F1729" stroke="#34504D"/>
+                        <text class="demo-title" x="42" y="49">My vault</text>
+                        <circle cx="430" cy="43" r="3" fill="#00E676"/>
+                        <circle cx="442" cy="43" r="3" fill="#527D6C"/>
+                        <rect x="42" y="67" width="416" height="36" rx="8" fill="#080E1A" stroke="#34504D"/>
+                        <g fill="none" stroke="#A9B5C6" stroke-width="1.5" stroke-linecap="round">
+                            <circle cx="61" cy="83" r="5"/><path d="m65 87 5 5"/>
+                        </g>
+                        <text class="demo-text demo-placeholder demo-state" x="85" y="90">Search logins</text>
+                        <text class="demo-text demo-search-query demo-state" x="85" y="90">Email</text>
+                        <rect class="demo-selected demo-state" x="42" y="120" width="416" height="72" rx="10" fill="#142630" stroke="#527D6C"/>
+                        <text class="demo-title" x="62" y="147">Email</text>
+                        <text class="demo-text demo-mask demo-state" x="62" y="174" letter-spacing="3">••••••••••</text>
+                        <text class="demo-text demo-password demo-state" x="62" y="174">DemoPass24!</text>
+                        <g class="demo-saved demo-state">
+                            <circle cx="428" cy="155" r="12" fill="#00E676"/>
+                            <path d="m422 155 4 4 8-9" fill="none" stroke="#103428" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </g>
+                        <text class="demo-key demo-state" x="62" y="209" fill="#A6E4C3" font-size="11">Master key entered · example only</text>
+                        <g class="demo-other demo-state">
+                            <rect x="42" y="220" width="416" height="36" rx="8" fill="#142630"/>
+                            <text class="demo-text" x="62" y="243">Work</text>
+                            <text class="demo-text" x="352" y="243" letter-spacing="2">••••••</text>
+                            <rect x="42" y="268" width="416" height="36" rx="8" fill="#142630"/>
+                            <text class="demo-text" x="62" y="291">Shopping</text>
+                            <text class="demo-text" x="352" y="291" letter-spacing="2">••••••</text>
+                        </g>
+                    </svg>
+                    <figcaption class="motion-controls">
+                        <span id="walkthrough-caption" class="sr-only">Example data · interactive illustration</span>
+                        <button class="motion-toggle" type="button" aria-label="Pause animation" title="Pause animation" data-motion-toggle hidden>
+                            <svg class="motion-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg>
+                        </button>
+                    </figcaption>
+                </figure>
+                <ol class="steps">
+                    <li data-walkthrough-step="save">
+                        <h3><button class="step-trigger" type="button" data-demo-step="save" aria-controls="walkthroughScene" aria-pressed="true" disabled>Save a login</button></h3>
+                        <p>Create your account, choose a master key, and add a login. Its password is encrypted in your browser before saving.</p>
+                    </li>
+                    <li data-walkthrough-step="find">
+                        <h3><button class="step-trigger" type="button" data-demo-step="find" aria-controls="walkthroughScene" aria-pressed="false" disabled>Find it quickly</button></h3>
+                        <p>Search by service name or browse your categories to locate a saved login.</p>
+                    </li>
+                    <li data-walkthrough-step="reveal">
+                        <h3><button class="step-trigger" type="button" data-demo-step="reveal" aria-controls="walkthroughScene" aria-pressed="false" disabled>Reveal when needed</button></h3>
+                        <p>Enter your master key to reveal a password. It hides again after 30 seconds.</p>
+                    </li>
+                </ol>
+            </div>
         </section>
 
         <section class="faq" aria-labelledby="faq-title">
@@ -353,15 +417,26 @@ $userLoggedIn = isLoggedIn() && verifySession();
             const toggle = document.getElementById('motionToggle');
             if (!scene || !toggle || !('IntersectionObserver' in window)) return;
 
+            const walkthrough = document.getElementById('walkthroughScene');
+            const scenes = [scene, walkthrough].filter(Boolean);
+            const toggles = document.querySelectorAll('[data-motion-toggle]');
             const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
             const activeReveals = new Set();
-            let visible = false;
+            const visibleScenes = new Set();
             let paused = false;
+            // Shared controls stop nonessential movement when paused, hidden, or offscreen.
             const updateMotion = () => {
-                scene.classList.toggle('motion-enabled', !reducedMotion.matches);
-                scene.classList.toggle('motion-running', visible && !document.hidden && !paused && !reducedMotion.matches);
-                toggle.hidden = reducedMotion.matches;
-                toggle.textContent = paused ? 'Play animation' : 'Pause animation';
+                scenes.forEach(target => {
+                    target.classList.toggle('motion-enabled', !reducedMotion.matches);
+                    target.classList.toggle('motion-running', visibleScenes.has(target) && !document.hidden && !paused && !reducedMotion.matches);
+                });
+                toggles.forEach(button => {
+                    button.hidden = reducedMotion.matches;
+                    const label = paused ? 'Play animation' : 'Pause animation';
+                    button.setAttribute('aria-label', label);
+                    button.title = label;
+                    button.querySelector('path').setAttribute('d', paused ? 'M8 5v14l11-7z' : 'M7 5h3v14H7zM14 5h3v14h-3z');
+                });
                 if (paused || reducedMotion.matches || document.hidden) {
                     activeReveals.forEach(animation => animation.finish());
                 }
@@ -370,8 +445,9 @@ $userLoggedIn = isLoggedIn() && verifySession();
             // Animate on entry without hiding content before JavaScript or observation succeeds.
             const observer = new IntersectionObserver(entries => {
                 entries.forEach(entry => {
-                    if (entry.target === scene) {
-                        visible = entry.isIntersecting;
+                    if (scenes.includes(entry.target)) {
+                        if (entry.isIntersecting) visibleScenes.add(entry.target);
+                        else visibleScenes.delete(entry.target);
                         updateMotion();
                     } else if (entry.isIntersecting) {
                         const target = entry.target;
@@ -391,9 +467,39 @@ $userLoggedIn = isLoggedIn() && verifySession();
                     }
                 });
             }, { threshold: 0.05 });
-            observer.observe(scene);
+            scenes.forEach(target => observer.observe(target));
             document.querySelectorAll('[data-scroll-reveal]').forEach(target => observer.observe(target));
-            toggle.addEventListener('click', () => { paused = !paused; updateMotion(); });
+            toggles.forEach(button => button.addEventListener('click', () => { paused = !paused; updateMotion(); }));
+
+            // The same three states can be selected by scrolling or by the step buttons.
+            if (walkthrough) {
+                const stepButtons = document.querySelectorAll('[data-demo-step]');
+                const showStep = step => {
+                    walkthrough.dataset.step = step;
+                    stepButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.demoStep === step)));
+                };
+                stepButtons.forEach(button => {
+                    button.disabled = false;
+                    button.addEventListener('click', () => showStep(button.dataset.demoStep));
+                });
+                const followScroll = entries => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) showStep(entry.target.dataset.walkthroughStep);
+                    });
+                };
+                let stepObserver;
+                const observeSteps = () => {
+                    if (stepObserver) stepObserver.disconnect();
+                    // Pixel margins keep the trigger below the mobile illustration at any aspect ratio.
+                    stepObserver = new IntersectionObserver(followScroll, {
+                        rootMargin: `-${Math.round(innerHeight * 0.55)}px 0px -${innerHeight - Math.round(innerHeight * 0.55) - 1}px 0px`,
+                        threshold: 0
+                    });
+                    document.querySelectorAll('[data-walkthrough-step]').forEach(target => stepObserver.observe(target));
+                };
+                observeSteps();
+                window.addEventListener('resize', observeSteps);
+            }
             reducedMotion.addEventListener('change', updateMotion);
             document.addEventListener('visibilitychange', updateMotion);
             updateMotion();
