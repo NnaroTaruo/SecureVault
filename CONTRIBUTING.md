@@ -8,4 +8,6 @@
 
 Never commit `config.php`, real SQL dumps, passwords, authentication logs, or hosting credentials. Do not change key derivation, salts, or the encrypted data format without a migration that preserves existing vault access.
 
+After a repository history cleanup, clone the repository again. Merging or pushing an old clone can restore the removed logs.
+
 By contributing your own work, you agree that it is available under the project's [MIT license](LICENSE). Identify any third-party code or assets and preserve their license notices.

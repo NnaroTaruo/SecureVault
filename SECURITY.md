@@ -12,6 +12,8 @@ Saved account passwords use browser-side AES-256-GCM with PBKDF2/SHA-256 (100,00
 
 Do not change an existing vault's master password as a recovery shortcut. Keep access to the original key until a tested migration is available.
 
+Authentication request bodies must never be logged. Removing old logs or rewriting Git history does not invalidate captured passwords; replace any real credentials that were recorded or reused.
+
 ## Reporting a problem
 
 Do not put passwords, vault contents, or exploitation details in public issues. If GitHub shows **Security → Report a vulnerability**, use that private reporting option. Otherwise, open an issue asking the maintainer to arrange a private reporting channel, without describing the vulnerability.
