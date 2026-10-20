@@ -122,18 +122,22 @@ function loginUser($username, $password) {
         return ['success' => false, 'message' => 'Username and password required'];
     }
     
-    $stmt = $db->prepare('SELECT id, username, password_hash, master_key_salt FROM users WHERE username = ? OR email = ?');
+    // Serialize sign-in with key changes so an old-password login cannot finish afterward.
+    $db->begin_transaction();
+    $stmt = $db->prepare('SELECT id, username, password_hash, master_key_salt FROM users WHERE username = ? OR email = ? FOR UPDATE');
     $stmt->bind_param('ss', $username, $username);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows === 0) {
+        $db->rollback();
         return ['success' => false, 'message' => 'Invalid username or password'];
     }
     
     $user = $result->fetch_assoc();
     
     if (!verifyPassword($password, $user['password_hash'])) {
+        $db->rollback();
         return ['success' => false, 'message' => 'Invalid username or password'];
     }
     
@@ -146,6 +150,7 @@ function loginUser($username, $password) {
     $stmt->bind_param('iss', $user['id'], $sessionToken, $expiresAt);
     
     if ($stmt->execute()) {
+        $db->commit();
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['session_token'] = $sessionToken;
         $_SESSION['username'] = $user['username'];
@@ -153,6 +158,7 @@ function loginUser($username, $password) {
         
         return ['success' => true, 'message' => 'Login successful'];
     } else {
+        $db->rollback();
         return ['success' => false, 'message' => 'Login failed'];
     }
 }
@@ -213,63 +219,96 @@ function requireLogin() {
  */
 function updateMasterPassword($userId, $oldPassword, $newPassword, $accounts = null) {
     $db = Database::getInstance()->getConnection();
-    
-    // Get current password hash
-    $stmt = $db->prepare('SELECT password_hash FROM users WHERE id = ?');
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows === 0) {
-        return ['success' => false, 'message' => 'User not found'];
-    }
-    
-    $user = $result->fetch_assoc();
-    
-    if (!verifyPassword($oldPassword, $user['password_hash'])) {
-        return ['success' => false, 'message' => 'Current password is incorrect'];
-    }
-    
-    if (!validatePasswordStrength($newPassword)) {
+
+    if (!is_string($oldPassword) || !is_string($newPassword) || !validatePasswordStrength($newPassword)) {
         return ['success' => false, 'message' => 'New password does not meet strength requirements'];
     }
-    
-    $newHash = hashPassword($newPassword);
-    
-    // Start transaction for atomic update
-    $db->begin_transaction();
+    if ($oldPassword === $newPassword) {
+        return ['success' => false, 'message' => 'Choose a different master key'];
+    }
+    // bcrypt authenticates at most 72 bytes; never silently truncate a new vault key.
+    if (strlen($newPassword) > 72) {
+        return ['success' => false, 'message' => 'Your new master key is too long. Try a shorter phrase.'];
+    }
+    if (!is_array($accounts) || array_values($accounts) !== $accounts) {
+        return ['success' => false, 'message' => 'A complete encrypted vault is required. Reload the vault and try again.'];
+    }
 
+    $replacements = [];
+    foreach ($accounts as $account) {
+        if (!is_array($account) || !isset($account['id']) || !is_int($account['id']) || $account['id'] < 1
+            || isset($replacements[$account['id']]) || !is_string($account['previous_password_encrypted'] ?? null)
+            || !is_string($account['password_encrypted'] ?? null)) {
+            return ['success' => false, 'message' => 'Invalid encrypted vault. Reload the vault and try again.'];
+        }
+        $previous = base64_decode($account['previous_password_encrypted'], true);
+        $replacement = base64_decode($account['password_encrypted'], true);
+        if ($previous === false || $replacement === false || strlen($previous) < 28
+            || strlen($previous) !== strlen($replacement) || substr($previous, 0, 12) === substr($replacement, 0, 12)) {
+            return ['success' => false, 'message' => 'Invalid encrypted password data. Nothing was changed.'];
+        }
+        $replacements[$account['id']] = $account;
+    }
+
+    $status = 400;
     try {
-        $stmt = $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
-        $stmt->bind_param('si', $newHash, $userId);
-
-        if (!$stmt->execute()) {
-            throw new Exception('Failed to update password hash');
+        $tables = $db->query("SELECT COUNT(*) AS total FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('users', 'accounts', 'sessions') AND ENGINE = 'InnoDB'");
+        if ((int)$tables->fetch_assoc()['total'] !== 3) {
+            return ['success' => false, 'message' => 'This database needs transactional tables before master keys can be changed.'];
+        }
+        $db->begin_transaction();
+        // All online vault writes take this same user lock and then recheck the session.
+        $stmt = $db->prepare('SELECT password_hash FROM users WHERE id = ? FOR UPDATE');
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+        if (!$user || !verifySession()) {
+            $status = 401;
+            throw new DomainException('Your session expired. Sign in again.');
+        }
+        if (!verifyPassword($oldPassword, $user['password_hash'])) {
+            throw new DomainException('Current password is incorrect');
         }
 
-        // Update encrypted passwords if provided
-        if ($accounts !== null && is_array($accounts)) {
-            $updateStmt = $db->prepare('UPDATE accounts SET password_encrypted = ?, updated_at = NOW() WHERE id = ? AND user_id = ?');
-
-            foreach ($accounts as $acc) {
-                if (!isset($acc['id']) || !isset($acc['password_encrypted'])) {
-                    continue; // Skip invalid entries
-                }
-
-                $accountId = (int)$acc['id'];
-                $encryptedPassword = $acc['password_encrypted'];
-
-                $updateStmt->bind_param('sii', $encryptedPassword, $accountId, $userId);
-                if (!$updateStmt->execute()) {
-                    throw new Exception('Failed to update an account');
-                }
+        $stmt = $db->prepare('SELECT id, password_encrypted FROM accounts WHERE user_id = ? ORDER BY id FOR UPDATE');
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $currentAccounts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $status = 409;
+        if (count($currentAccounts) !== count($replacements)) {
+            throw new DomainException('Your vault changed. Reload it and try again; nothing was changed.');
+        }
+        foreach ($currentAccounts as $account) {
+            $replacement = $replacements[$account['id']] ?? null;
+            if (!$replacement || $replacement['previous_password_encrypted'] !== $account['password_encrypted']) {
+                throw new DomainException('Your vault changed. Reload it and try again; nothing was changed.');
             }
         }
 
-        $db->commit();
-        return ['success' => true, 'message' => 'Master password updated successfully'];
-    } catch (Exception $e) {
+        $stmt = $db->prepare('UPDATE accounts SET password_encrypted = ?, updated_at = NOW() WHERE id = ? AND user_id = ?');
+        foreach ($replacements as $accountId => $account) {
+            $encryptedPassword = $account['password_encrypted'];
+            $stmt->bind_param('sii', $encryptedPassword, $accountId, $userId);
+            if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+                throw new RuntimeException('Encrypted account update failed');
+            }
+        }
+        $newHash = hashPassword($newPassword);
+        $stmt = $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+        $stmt->bind_param('si', $newHash, $userId);
+        if (!$stmt->execute()) throw new RuntimeException('Password hash update failed');
+        $stmt = $db->prepare('DELETE FROM sessions WHERE user_id = ?');
+        $stmt->bind_param('i', $userId);
+        if (!$stmt->execute()) throw new RuntimeException('Session invalidation failed');
+        if (!$db->commit()) throw new RuntimeException('Password change commit failed');
+        $_SESSION = [];
+        return ['success' => true, 'message' => 'Master key changed. Sign in with your new key.'];
+    } catch (DomainException $e) {
         $db->rollback();
-        return ['success' => false, 'message' => 'Failed to update password: ' . $e->getMessage()];
+        return ['success' => false, 'message' => $e->getMessage(), 'status' => $status];
+    } catch (Throwable $e) {
+        try { $db->rollback(); } catch (Throwable $ignored) {}
+        error_log('Master password change failed (code ' . $e->getCode() . ')');
+        return ['success' => false, 'message' => 'Could not complete the key change. Sign in online to refresh your vault.', 'status' => 500];
     }
 }

@@ -32,7 +32,7 @@ For InfinityFree, import the schema into your hosting database and upload the ap
 
 This is an **experimental project**. Saved account passwords are encrypted in the browser, but authentication still sends the master password to PHP. The implementation does **not yet meet its intended zero-knowledge design**.
 
-Master-password changes can leave entries requiring the previous key. Keep the original key until all entries are verified.
+Master-key changes require an online connection and an updated browser. They re-encrypt the complete current vault and sign out every session; other devices must reconnect to refresh their offline copies.
 
 See [SECURITY.md](SECURITY.md) for limitations and reporting guidance, and [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
 

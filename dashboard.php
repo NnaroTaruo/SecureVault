@@ -14,6 +14,8 @@ if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
 
 requireLogin();
 
+if (empty($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
 $user = getCurrentUser();
 $userId = getCurrentUserId();
 $categories = getUserCategories($userId);
@@ -685,7 +687,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
      class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm
             flex items-end md:items-center justify-center z-50 p-0 md:p-4">
     <div class="bg-dark-card border border-dark-border rounded-t-2xl md:rounded-2xl
-                w-full md:max-w-md shadow-2xl modal-anim">
+                w-full md:max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain shadow-2xl modal-anim">
         <div class="p-5 border-b border-dark-border flex justify-between items-center">
             <h2 class="text-lg font-bold">Settings</h2>
             <button onclick="closeModal('settingsModal')" class="text-2xl text-gray-400 hover:text-white">&times;</button>
@@ -702,6 +704,9 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             </div>
         </div>
         <form id="settingsForm" onsubmit="handleSettingsSubmit(event)" class="p-5 space-y-4">
+            <p class="text-xs text-gray-400">Your saved passwords will be updated together. You will then sign in with your new master key.</p>
+            <p id="keyChangeStatus" role="status" aria-live="polite" class="text-xs text-primary"></p>
+            <a id="keyChangeRecovery" href="login.php" class="hidden text-xs text-primary underline">Sign in online to refresh your vault</a>
             <div>
                 <label for="oldPassword" class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">Current Master Key *</label>
                 <input type="password" id="oldPassword" placeholder="••••••••"
@@ -721,7 +726,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                               placeholder-gray-500 text-sm focus:outline-none focus:border-primary transition-all" required>
             </div>
             <div class="flex gap-3 pt-2">
-                <button type="submit"
+                <button type="submit" id="settingsSubmitBtn"
                         class="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-dark-bg font-bold rounded-xl transition-all">
                     Update Key
                 </button>
@@ -951,6 +956,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 
 <script>
     const USER_SALT = "<?php echo isset($_SESSION['master_key_salt']) ? addslashes($_SESSION['master_key_salt']) : ''; ?>";
+    const CSRF_TOKEN = <?php echo json_encode($_SESSION['csrf_token']); ?>;
 </script>
 <!-- About App Modal -->
 <div id="aboutModal"
@@ -994,7 +1000,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     </div>
 </div>
 
-<script src="js/dashboard.js?v=9"></script>
+<script src="js/dashboard.js?v=10"></script>
 <script src="js/pwa.js"></script>
 
 <!-- PWA Install Banner (Premium) -->

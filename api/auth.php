@@ -5,6 +5,7 @@
 
 // Prevent any output before JSON header
 ob_start();
+header('Cache-Control: no-store');
 
 require_once '../config.php';
 require_once '../auth.php';
@@ -19,7 +20,8 @@ if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
 
 // Set error handling
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
+    http_response_code(500);
     header('Content-Type: application/json');
     error_log("Auth Error: $errstr in $errfile:$errline");
     echo json_encode(['success' => false, 'message' => 'Server error']);
@@ -27,7 +29,8 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 });
 
 set_exception_handler(function($e) {
-    ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
+    http_response_code(500);
     header('Content-Type: application/json');
     error_log("Auth Exception: " . $e->getMessage());
     echo json_encode(['success' => false, 'message' => 'Server error']);
@@ -76,7 +79,7 @@ switch ($action) {
         break;
     
     case 'me':
-        if (!isLoggedIn()) {
+        if (!isLoggedIn() || !verifySession()) {
             jsonResponse(false, 'Not authenticated', null, 401);
         }
         
@@ -93,23 +96,27 @@ switch ($action) {
             jsonResponse(false, 'Invalid method', null, 400);
         }
         
-        if (!isLoggedIn()) {
+        if (!isLoggedIn() || !verifySession()) {
             jsonResponse(false, 'Not authenticated', null, 401);
         }
-        
-
+        $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (!is_string($csrfToken) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $csrfToken)) {
+            jsonResponse(false, 'Reload the vault before changing your master key.', null, 403);
+        }
         $oldPassword = $_POST['old_password'] ?? '';
         $newPassword = $_POST['new_password'] ?? '';
-        
-        // Parse accounts if provided
-        $accounts = null;
-        if (isset($_POST['accounts']) && !empty($_POST['accounts'])) {
-            $accounts = json_decode($_POST['accounts'], true);
+        $encodedAccounts = $_POST['accounts'] ?? '';
+        if (!is_string($oldPassword) || !is_string($newPassword) || !is_string($encodedAccounts)
+            || !str_starts_with(ltrim($encodedAccounts), '[')) {
+            jsonResponse(false, 'A complete encrypted vault is required. Reload the vault and try again.', null, 400);
         }
-
+        $accounts = json_decode($encodedAccounts, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($accounts)) {
+            jsonResponse(false, 'Invalid encrypted vault. Reload the vault and try again.', null, 400);
+        }
         $result = updateMasterPassword(getCurrentUserId(), $oldPassword, $newPassword, $accounts);
 
-        $statusCode = $result['success'] ? 200 : 400;
+        $statusCode = $result['success'] ? 200 : ($result['status'] ?? 400);
         jsonResponse($result['success'], $result['message'], null, $statusCode);
         break;
     

@@ -86,6 +86,7 @@ const VaultDB = {
 
             tx.oncomplete = () => resolve(true);
             tx.onerror = (e) => reject(e.target.error);
+            tx.onabort = () => reject(tx.error || new Error('Offline storage update was interrupted'));
         });
     },
 
@@ -207,6 +208,9 @@ async function decryptPasswordLocal(encryptedBase64, key) {
 }
 
 // ── 3. Vault Synchronization & Offline Mode ─────────────────
+let masterPasswordChangeInProgress = false;
+const VAULT_CACHE_LOCK = 'securevault-vault-cache';
+
 function updateStatusPill(isOnline) {
     const pill = document.getElementById('offlineStatusPill');
     if (pill) {
@@ -215,34 +219,36 @@ function updateStatusPill(isOnline) {
 }
 
 async function syncVaultFromNetwork() {
-    if (!navigator.onLine) {
-        updateStatusPill(false);
-        checkRenderOfflineVault();
-        return;
-    }
-
-    try {
-        const response = await fetch('api/accounts.php?action=sync_vault', {
-            method: 'GET',
-            headers: { 'Cache-Control': 'no-cache' }
-        });
-        const data = await response.json();
-        if (data.success && data.data) {
-            await VaultDB.saveAll(data.data.accounts || [], {
-                salt: data.data.salt || (typeof USER_SALT !== 'undefined' ? USER_SALT : ''),
-                categories: data.data.categories || [],
-                synced_at: data.data.synced_at || new Date().toISOString()
-            });
-            updateStatusPill(true);
-        } else {
+    if (masterPasswordChangeInProgress) return false;
+    const synchronize = async () => {
+        if (masterPasswordChangeInProgress) return false;
+        if (!navigator.onLine) {
             updateStatusPill(false);
             checkRenderOfflineVault();
+            return false;
         }
-    } catch (err) {
-        console.warn('Network sync failed, using offline vault:', err);
+        try {
+            const response = await fetch('api/accounts.php?action=sync_vault', {
+                method: 'GET', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' }
+            });
+            const data = await response.json();
+            if (response.ok && data.success && Array.isArray(data.data?.accounts) && data.data.salt) {
+                if (!await VaultDB.saveAll(data.data.accounts, {
+                    salt: data.data.salt, categories: data.data.categories || [],
+                    synced_at: data.data.synced_at || new Date().toISOString(), rotation_pending: false
+                })) throw new Error('Offline storage is unavailable');
+                updateStatusPill(true);
+                return true;
+            }
+        } catch (err) {
+            console.warn('Network sync failed, using offline vault:', err);
+        }
         updateStatusPill(false);
         checkRenderOfflineVault();
-    }
+        return false;
+    };
+    // Serialize cache replacement across tabs, including an entire key change.
+    return navigator.locks ? navigator.locks.request(VAULT_CACHE_LOCK, synchronize) : synchronize();
 }
 
 async function checkRenderOfflineVault() {
@@ -606,7 +612,10 @@ function openAddAccountModal() {
 }
 
 function openSettingsModal() {
+    if (masterPasswordChangeInProgress) return;
     document.getElementById('settingsForm').reset();
+    document.getElementById('keyChangeStatus').textContent = '';
+    document.getElementById('keyChangeRecovery').classList.add('hidden');
     openModal('settingsModal');
 }
 
@@ -615,6 +624,10 @@ function editAccount(accountId) {
 }
 
 async function getEffectiveSalt() {
+    if (await VaultDB.getMeta('rotation_pending')) {
+        showAlert('Reconnect and sign in online to refresh your vault before revealing or saving passwords.', 'warning');
+        return null;
+    }
     if (typeof USER_SALT !== 'undefined' && USER_SALT) return USER_SALT;
     const cachedSalt = await VaultDB.getMeta('salt');
     return cachedSalt || '';
@@ -623,6 +636,7 @@ async function getEffectiveSalt() {
 async function executeEditFetch(accountId, masterPassword) {
     let acc = null;
     const salt = await getEffectiveSalt();
+    if (salt === null) return;
 
     if (navigator.onLine) {
         try {
@@ -703,6 +717,7 @@ async function handleAccountSubmit(event) {
     const isEdit   = !!accountId;
     const endpoint = isEdit ? 'api/accounts.php?action=update' : 'api/accounts.php?action=add_account';
     const salt     = await getEffectiveSalt();
+    if (salt === null) return;
 
     try {
         const key = await deriveKey(masterPass, salt);
@@ -723,7 +738,7 @@ async function handleAccountSubmit(event) {
         });
         if (isEdit) body.append('id', accountId);
 
-        const response = await fetch(endpoint, { method: 'POST', body });
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'X-CSRF-Token': CSRF_TOKEN }, body });
         const data = await response.json();
 
         if (data.success) {
@@ -803,6 +818,7 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
     let encryptedPassword = null;
     let isOfflineDecrypted = false;
     const salt = await getEffectiveSalt();
+    if (salt === null) return;
 
     // 1. Try fetching live from server
     if (navigator.onLine) {
@@ -902,7 +918,7 @@ async function executeDeleteAccount(accountId, masterPassword) {
     try {
         const response = await fetch('api/accounts.php?action=delete_account', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN },
             body: new URLSearchParams({ action: 'delete_account', id: accountId })
         });
         const data = await response.json();
@@ -943,6 +959,8 @@ function openModal(id) {
 }
 
 function closeModal(id) {
+    if (id === 'settingsModal' && masterPasswordChangeInProgress) return;
+    if (id === 'settingsModal') document.getElementById('settingsForm').reset();
     const el = document.getElementById(id);
     if (el) {
         el.classList.add('hidden');
@@ -984,58 +1002,112 @@ function copyUserClipboard(text) {
 
 async function handleSettingsSubmit(event) {
     event.preventDefault();
+    if (masterPasswordChangeInProgress) return;
     const oldKey = document.getElementById('oldPassword').value;
     const newKey = document.getElementById('newPassword').value;
     const confirmKey = document.getElementById('confirmNewPassword').value;
     if (newKey !== confirmKey) { showAlert('New master keys do not match', 'error'); return; }
+    if (oldKey === newKey) { showAlert('Choose a different master key', 'error'); return; }
+    if (new TextEncoder().encode(newKey).length > 72) { showAlert('Your new master key is too long. Try a shorter phrase.', 'error'); return; }
     if (!navigator.onLine) {
         showAlert('Cannot update master password while offline.', 'warning');
         return;
     }
+    if (!navigator.locks) {
+        showAlert('Please use an updated browser to change your master key safely.', 'warning');
+        return;
+    }
+    const form = document.getElementById('settingsForm');
+    const status = document.getElementById('keyChangeStatus');
+    const recovery = document.getElementById('keyChangeRecovery');
+    const button = document.getElementById('settingsSubmitBtn');
+    const controls = document.querySelectorAll('#settingsModal button, #settingsForm input');
+    let requestStarted = false;
+    let changed = false;
+    masterPasswordChangeInProgress = true;
+    controls.forEach(control => { control.disabled = true; });
+    form.setAttribute('aria-busy', 'true');
+    button.textContent = 'Updating saved passwords…';
+    status.textContent = 'Updating your saved passwords. Keep this page open.';
+    recovery.classList.add('hidden');
     try {
-        const salt = await getEffectiveSalt();
-        const oldCryptoKey = await deriveKey(oldKey, salt);
-        const newCryptoKey = await deriveKey(newKey, salt);
-        const accounts = await VaultDB.getAll();
-        const updatedAccounts = [];
-        for (const acc of accounts) {
-            if (acc.password_encrypted) {
+        await navigator.locks.request(VAULT_CACHE_LOCK, async () => {
+            // Never rotate from a possibly incomplete or stale IndexedDB copy.
+            const fresh = await fetch('api/accounts.php?action=sync_vault', {
+                cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000)
+            });
+            const snapshot = await fresh.json();
+            if (!fresh.ok || !snapshot.success || !Array.isArray(snapshot.data?.accounts) || !snapshot.data.salt) {
+                throw new Error('Could not load your current vault. Sign in online and try again.');
+            }
+            const vault = snapshot.data;
+            const oldCryptoKey = await deriveKey(oldKey, vault.salt);
+            const newCryptoKey = await deriveKey(newKey, vault.salt);
+            const updatedAccounts = [];
+            for (const acc of vault.accounts) {
                 const plaintext = await decryptPasswordLocal(acc.password_encrypted, oldCryptoKey);
                 if (plaintext === null) {
-                    showAlert('Current master password is incorrect or vault is corrupted.', 'error');
-                    return;
+                    throw new Error('Your current key could not open every entry. Nothing was changed.');
                 }
                 const newEncrypted = await encryptPasswordLocal(plaintext, newCryptoKey);
                 updatedAccounts.push({
-                    id: acc.id,
+                    id: Number(acc.id),
+                    previous_password_encrypted: acc.password_encrypted,
                     password_encrypted: newEncrypted
                 });
             }
-        }
-        const response = await fetch('api/auth.php?action=update_master_password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                action: 'update_master_password',
-                old_password: oldKey,
-                new_password: newKey,
-                accounts: JSON.stringify(updatedAccounts)
-            })
+            const meta = { salt: vault.salt, categories: vault.categories || [], synced_at: vault.synced_at };
+            // Persist a barrier before sending: a lost response must not leave a usable stale offline copy.
+            try {
+                if (!await VaultDB.saveAll(vault.accounts, { ...meta, rotation_pending: true })) throw new Error();
+            } catch {
+                throw new Error('Could not prepare offline storage. Nothing was changed. Enable browser storage and try again.');
+            }
+            requestStarted = true;
+            const response = await fetch('api/auth.php?action=update_master_password', {
+                method: 'POST', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN },
+                body: new URLSearchParams({
+                    old_password: oldKey, new_password: newKey, accounts: JSON.stringify(updatedAccounts)
+                })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                // Only an explicit client error confirms that the server rejected the change.
+                if (response.status >= 400 && response.status < 500 && data.success === false) {
+                    requestStarted = false;
+                    await VaultDB.saveAll(vault.accounts, { ...meta, rotation_pending: false });
+                    throw new Error(data.message || 'The key change was rejected. Nothing was changed.');
+                }
+                throw new Error('The server could not confirm the key change.');
+            }
+            changed = true;
+            let offlineRefreshFailed = false;
+            try {
+                const accounts = vault.accounts.map((acc, index) => ({ ...acc, password_encrypted: updatedAccounts[index].password_encrypted }));
+                if (!await VaultDB.saveAll(accounts, { ...meta, synced_at: new Date().toISOString(), rotation_pending: false })) {
+                    throw new Error('Offline storage is unavailable');
+                }
+            } catch {
+                offlineRefreshFailed = true;
+            }
+            form.reset();
+            status.textContent = 'Master key changed. Sign in with your new key.';
+            window.location.replace('login.php?key_changed=1' + (offlineRefreshFailed ? '&offline_refresh=1' : ''));
         });
-        const data = await response.json();
-        if (data.success) {
-            showAlert('Master Key updated successfully!', 'success');
-            closeModal('settingsModal');
-            document.getElementById('oldPassword').value = '';
-            document.getElementById('newPassword').value = '';
-            document.getElementById('confirmNewPassword').value = '';
-            syncVaultFromNetwork();
-        } else {
-            showAlert(data.message || 'Update failed', 'error');
-        }
     } catch (e) {
-        console.error(e);
-        showAlert('An error occurred during update', 'error');
+        status.textContent = requestStarted
+            ? 'The result could not be confirmed. Sign in online with your new key, or your previous key if the change was not saved, to refresh offline access.'
+            : (e.message || 'Could not start the key change. Nothing was changed.');
+        recovery.classList.remove('hidden');
+        showAlert(status.textContent, requestStarted ? 'warning' : 'error');
+    } finally {
+        if (!changed) {
+            masterPasswordChangeInProgress = false;
+            controls.forEach(control => { control.disabled = false; });
+            form.removeAttribute('aria-busy');
+            button.textContent = 'Update Key';
+        }
     }
 }
 
@@ -1144,6 +1216,7 @@ function triggerInactivityLock() {
     if (masterPassModal) masterPassModal.value = '';
     const accountPassModal = document.getElementById('accountPassword');
     if (accountPassModal) accountPassModal.value = '';
+    document.getElementById('settingsForm')?.reset();
 
     // 5. Display the unblurred Vault Lock Screen
     const lockOverlay = document.getElementById('vaultLockOverlay');
@@ -1163,10 +1236,10 @@ function triggerInactivityLock() {
 window.__triggerInactivityLock = triggerInactivityLock;
 
 // Network status listeners
-window.addEventListener('online', () => {
+window.addEventListener('online', async () => {
     updateStatusPill(true);
-    syncVaultFromNetwork();
-    showAlert('🟢 Reconnected to network. Vault synced!', 'success');
+    const synced = await syncVaultFromNetwork();
+    showAlert(synced ? 'Reconnected. Vault synced!' : 'Reconnected. Sign in online to refresh your vault.', synced ? 'success' : 'warning');
 });
 
 window.addEventListener('offline', () => {
