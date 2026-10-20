@@ -107,6 +107,13 @@ $userLoggedIn = isLoggedIn() && verifySession();
         .step-trigger[aria-pressed="true"] { color: var(--green); }
         .step-trigger:disabled { cursor: default; text-decoration: none; }
         .steps p { max-width: 32ch; color: var(--muted); font-size: 14px; }
+        .privacy { display: grid; grid-template-columns: 1fr 1.4fr; align-items: center; gap: 24px 64px; padding-block: 56px 64px; border-top: 1px solid var(--line); }
+        .privacy-copy { margin-top: 20px; max-width: 44ch; color: var(--muted); font-size: 15px; }
+        .privacy-visual { width: min(100%, 420px); margin: 0 auto; }
+        .privacy-visual svg { display: block; width: 100%; height: auto; }
+        .privacy-visual text { font-family: 'Inter', sans-serif; }
+        .privacy-status { grid-column: 1 / -1; max-width: 78ch; color: var(--muted); font-size: 14px; }
+        .privacy-status strong { color: var(--text); font-weight: 600; }
         .faq { display: grid; grid-template-columns: 1fr 1.4fr; gap: 64px; padding-block: 56px 64px; border-top: 1px solid var(--line); }
         .faq-intro { margin-top: 12px; max-width: 25ch; color: var(--muted); font-size: 14px; }
         .faq-list { min-width: 0; }
@@ -179,6 +186,8 @@ $userLoggedIn = isLoggedIn() && verifySession();
             .walkthrough-preview { top: 0; z-index: 2; padding-block: 12px; background: var(--bg); }
             .walkthrough-preview svg { max-height: 220px; }
             .steps li { min-height: 220px; }
+            .privacy { grid-template-columns: 1fr; gap: 28px; }
+            .privacy-copy { max-width: none; }
             .faq { grid-template-columns: 1fr; gap: 28px; }
             .faq-intro { max-width: none; }
         }
@@ -193,7 +202,7 @@ $userLoggedIn = isLoggedIn() && verifySession();
             .hero-copy { margin-top: 20px; }
             .hero-actions { margin-top: 28px; gap: 20px; }
             .hero-actions .button { width: 100%; }
-            .getting-started, .faq { padding-block: 40px; }
+            .getting-started, .privacy, .faq { padding-block: 40px; }
             .walkthrough { margin-top: 24px; }
             .walkthrough-preview svg { max-height: 200px; }
             .steps li { position: relative; padding-left: 32px; }
@@ -366,6 +375,46 @@ $userLoggedIn = isLoggedIn() && verifySession();
             </div>
         </section>
 
+        <section id="data-privacy" class="privacy" aria-labelledby="privacy-title">
+            <div>
+                <h2 id="privacy-title">Your data, explained.</h2>
+                <p class="privacy-copy">Saved account passwords are encrypted in your browser before they are stored on the server.</p>
+                <p class="privacy-copy">Your email, login names, website URLs, notes, and categories are stored without that encryption. This browser also keeps a local vault copy for offline access.</p>
+            </div>
+            <!-- This diagram describes saved account passwords; sign-in follows the separate path noted below. -->
+            <figure class="privacy-visual" aria-label="How saved account passwords are handled">
+                <svg viewBox="0 0 420 420" width="420" height="420" role="img" aria-labelledby="privacy-flow-title" aria-describedby="privacy-flow-description">
+                    <title id="privacy-flow-title">Saved account password flow</title>
+                    <desc id="privacy-flow-description">Your browser encrypts a saved account password before sending it to the server. The server stores the encrypted password, and this device can keep an encrypted copy for offline access. Other account details and the master password used for sign-in are handled differently, as explained in this section.</desc>
+                    <g fill="none" stroke="#34504D" stroke-width="1.5">
+                        <rect x="30" y="20" width="360" height="100" rx="12"/>
+                        <rect x="30" y="160" width="360" height="100" rx="12"/>
+                        <rect x="30" y="300" width="360" height="100" rx="12"/>
+                    </g>
+                    <g fill="none" stroke="#86BAA1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="54" y="40" width="25" height="20" rx="3"/>
+                        <path d="M54 46h25m-20-3h1m4 0h1"/>
+                        <ellipse cx="66" cy="185" rx="12" ry="4"/>
+                        <path d="M54 185v14c0 5 24 5 24 0v-14m-24 7c0 5 24 5 24 0"/>
+                        <rect x="57" y="322" width="18" height="27" rx="3"/>
+                        <path d="M63 326h6m-4 19h2"/>
+                        <path d="M210 127v26m-6-6 6 6 6-6M210 267v26m-6-6 6 6 6-6"/>
+                    </g>
+                    <g fill="#F3F6FA" font-size="20" font-weight="600">
+                        <text x="94" y="57">Your browser</text>
+                        <text x="94" y="197">Online vault</text>
+                        <text x="94" y="339">This device</text>
+                    </g>
+                    <g fill="#B8CFC4" font-size="16">
+                        <text x="54" y="94">Encrypts the password before sending</text>
+                        <text x="54" y="234">Stores the encrypted password</text>
+                        <text x="54" y="374">Keeps an encrypted copy for offline use</text>
+                    </g>
+                </svg>
+            </figure>
+            <p class="privacy-status"><strong>Current limitation.</strong> The server still receives your master password when you sign in, and sign-in requests are logged. This privacy design is still being improved.</p>
+        </section>
+
         <section class="faq" aria-labelledby="faq-title">
             <div data-scroll-reveal>
                 <h2 id="faq-title">A few things to know.</h2>
@@ -396,6 +445,7 @@ $userLoggedIn = isLoggedIn() && verifySession();
             </div>
             <div class="footer-links">
                 <a class="quiet-link" href="#how-it-works">How it works</a>
+                <a class="quiet-link" href="#data-privacy">Data privacy</a>
                 <a class="quiet-link" href="https://github.com/RonanStack24/SecureVault" target="_blank" rel="noopener noreferrer">Source code</a>
             </div>
         </div>
