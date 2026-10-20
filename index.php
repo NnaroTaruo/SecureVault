@@ -1,7 +1,6 @@
 <?php
 /**
- * SecureVault — Official Landing Page
- * Zero-Knowledge Personal Password Vault
+ * SecureVault — Product Landing Page
  */
 
 require_once 'config.php';
@@ -13,10 +12,9 @@ if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
 }
 
 $userLoggedIn = isLoggedIn() && verifySession();
-$currentUser  = $userLoggedIn ? getCurrentUser() : null;
 ?>
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -25,727 +23,381 @@ $currentUser  = $userLoggedIn ? getCurrentUser() : null;
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SecureVault">
-    <meta name="description" content="SecureVault — Zero-knowledge client-side encrypted password manager. Military-grade AES-256-GCM security and installable PWA.">
-    <title>SecureVault — Zero-Knowledge Encrypted Password Manager</title>
+    <meta name="description" content="Keep your passwords in one place. Save your logins, find them quickly, and access your saved vault offline.">
+    <title>SecureVault — Your passwords, in one place</title>
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="logo.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary':       '#00E676',
-                        'primary-dark':  '#00C65E',
-                        'dark-bg':       '#080E1A',
-                        'dark-card':     '#0F1729',
-                        'dark-border':   '#1A2540',
-                        'dark-surface':  '#131D33',
-                    },
-                    fontFamily: { sans: ['Inter', 'sans-serif'] }
-                }
-            }
-        }
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background-color: #080E1A; color: #FFFFFF; overflow-x: hidden; }
-
-        /* Background dots pattern */
-        .bg-dots {
-            background-image: radial-gradient(rgba(0, 230, 118, 0.08) 1px, transparent 1px);
-            background-size: 28px 28px;
-        }
-
-        /* Glassmorphism */
-        .glass-nav {
-            background: rgba(8, 14, 26, 0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid rgba(26, 37, 64, 0.7);
-        }
-        .glass-card {
-            background: rgba(15, 23, 41, 0.75);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(26, 37, 64, 0.9);
-        }
-        .glass-card:hover {
-            border-color: rgba(0, 230, 118, 0.4);
-            transform: translateY(-2px);
-        }
-
-        /* Gradient Text */
-        .text-gradient {
-            background: linear-gradient(135deg, #FFFFFF 30%, #00E676 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .text-gradient-subtle {
-            background: linear-gradient(135deg, #E2E8F0 0%, #94A3B8 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        /* Subtle glow pulsing */
-        @keyframes pulseGlow {
-            0%, 100% { opacity: 0.15; transform: scale(1); }
-            50% { opacity: 0.28; transform: scale(1.08); }
-        }
-        .glow-sphere { animation: pulseGlow 6s ease-in-out infinite; }
-
-        /* Smooth accordion transitions */
-        details summary::-webkit-details-marker { display: none; }
+        :root { color-scheme: dark; --bg: #080E1A; --surface: #0F1729; --line: #253147; --text: #F3F6FA; --muted: #A9B5C6; --green: #00E676; }
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 16px; line-height: 1.65; }
+        a { color: inherit; text-decoration: none; text-underline-offset: 4px; }
+        button, summary { -webkit-tap-highlight-color: transparent; }
+        button { font: inherit; }
+        button, a, summary { touch-action: manipulation; }
+        a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 5px; }
+        ::selection { background: var(--green); color: var(--bg); }
+        .container { width: min(1080px, calc(100% - 48px)); margin-inline: auto; }
+        .skip-link { position: absolute; top: 12px; left: 12px; z-index: 10; padding: 8px 16px; background: var(--green); color: var(--bg); transform: translateY(-150%); }
+        .skip-link:focus { transform: translateY(0); }
+        .site-header { border-bottom: 1px solid var(--line); }
+        .header-inner { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+        .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; white-space: nowrap; }
+        .brand img { width: 34px; height: 34px; }
+        .brand span { color: var(--green); }
+        .header-links { display: flex; align-items: center; gap: 32px; font-size: 14px; font-weight: 500; }
+        .quiet-link { color: var(--muted); }
+        .quiet-link:hover, .text-link:hover { color: var(--green); }
+        .header-action { min-height: 44px; display: inline-flex; align-items: center; }
+        .hero { display: grid; grid-template-columns: 1.15fr 1fr; align-items: center; gap: 64px; padding-block: 88px 80px; }
+        h1, h2, h3, p { margin: 0; }
+        h1 { max-width: 10ch; font-size: clamp(42px, 5.2vw, 64px); font-weight: 700; line-height: 1.08; letter-spacing: -0.035em; text-wrap: balance; }
+        .hero-copy { max-width: 44ch; margin-top: 24px; color: var(--muted); font-size: 18px; }
+        .hero-actions { margin-top: 32px; display: flex; align-items: center; flex-wrap: wrap; gap: 24px; }
+        .button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 52px; padding: 12px 24px; border: 0; border-radius: 10px; background: var(--green); color: var(--bg); font-weight: 700; cursor: pointer; transition: background-color 160ms ease-out; }
+        .button:hover { background: #3BEF98; }
+        .button svg { width: 18px; height: 18px; }
+        .text-link { color: var(--text); font-size: 14px; font-weight: 500; text-decoration: underline; }
+        .hero-note { margin-top: 18px; color: var(--muted); font-size: 13px; }
+        .vault-preview { margin: 0; min-width: 0; }
+        .vault-scene { display: block; width: 100%; height: auto; overflow: visible; }
+        .vault-scene text { font-family: 'Inter', sans-serif; }
+        .motion-card-title { fill: var(--text); font-size: 14px; font-weight: 500; }
+        .motion-card-password { fill: var(--muted); font-size: 13px; letter-spacing: 3px; }
+        .motion-route { fill: none; stroke: #31584F; stroke-width: 1; }
+        .motion-flow { fill: none; stroke: #6CF0B1; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 4 40; }
+        .motion-core-label { fill: #A3D8C5; font-size: 11px; font-weight: 600; letter-spacing: 3px; }
+        .motion-controls { display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 44px; }
+        figcaption { color: var(--muted); font-size: 12px; }
+        .motion-toggle { min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--text); font-size: 12px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+        .motion-toggle:hover { color: var(--green); }
+        .motion-toggle[hidden] { display: none; }
+        .getting-started { border-top: 1px solid var(--line); padding-block: 56px 64px; }
+        h2 { font-size: clamp(26px, 3vw, 32px); font-weight: 600; line-height: 1.25; letter-spacing: -0.025em; text-wrap: balance; }
+        .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin: 32px 0 0; padding: 0; list-style: none; counter-reset: step; }
+        .steps li { counter-increment: step; }
+        .steps li::before { content: counter(step) "."; display: block; margin-bottom: 12px; color: var(--green); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        h3 { margin-bottom: 8px; font-size: 17px; font-weight: 600; }
+        .steps p { max-width: 32ch; color: var(--muted); font-size: 14px; }
+        .faq { display: grid; grid-template-columns: 1fr 1.4fr; gap: 64px; padding-block: 56px 64px; border-top: 1px solid var(--line); }
+        .faq-intro { margin-top: 12px; max-width: 25ch; color: var(--muted); font-size: 14px; }
+        .faq-list { min-width: 0; }
+        details { border-bottom: 1px solid var(--line); }
+        details:first-child { border-top: 1px solid var(--line); }
+        summary { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-block: 20px; list-style: none; font-size: 14px; font-weight: 500; cursor: pointer; }
+        summary::-webkit-details-marker { display: none; }
+        summary svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
         details[open] summary svg { transform: rotate(180deg); }
+        details p { padding-bottom: 20px; color: var(--muted); font-size: 14px; }
+        .site-footer { border-top: 1px solid var(--line); padding-block: 28px; color: var(--muted); font-size: 12px; }
+        .footer-inner { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+        .footer-links { display: flex; gap: 24px; }
+        .official-site { margin-top: 6px; }
+        .install-banner { position: fixed; right: 24px; bottom: 24px; z-index: 20; width: min(380px, calc(100% - 48px)); align-items: center; gap: 16px; padding: 20px; border-radius: 12px; background: #19263B; box-shadow: 0 12px 32px #0006; }
+        .install-banner p { margin-bottom: 12px; color: #DFE8F6; font-size: 14px; }
+        .install-banner .button { min-height: 44px; padding: 8px 16px; font-size: 14px; }
+        .dismiss-install { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #DFE8F6; cursor: pointer; }
+        .dismiss-install:hover { background: #25364F; }
+        .dismiss-install svg { width: 20px; height: 20px; }
+        .hidden { display: none; }
+        .flex { display: flex; }
+        /* The illustration stays complete without JavaScript; visible motion is opt-in. */
+        @media (prefers-reduced-motion: no-preference) {
+            @keyframes vault-orbit {
+                to { transform: rotate(360deg); }
+            }
+            @keyframes vault-card-float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-7px); }
+            }
+            @keyframes vault-data-flow {
+                to { stroke-dashoffset: -88; }
+            }
+            @keyframes vault-shackle-close {
+                0%, 8%, 100% { transform: translateY(-9px) rotate(12deg); }
+                22%, 86% { transform: translateY(0) rotate(0); }
+            }
+            @keyframes vault-seal {
+                0%, 14% { stroke-dashoffset: 480; }
+                44%, 86% { stroke-dashoffset: 0; }
+                100% { stroke-dashoffset: -480; }
+            }
+            .motion-enabled .motion-orbit { transform-origin: 250px 222px; animation: vault-orbit 22s linear infinite; }
+            .motion-enabled .motion-orbit-inner { animation-duration: 32s; animation-direction: reverse; }
+            .motion-enabled .motion-card { animation: vault-card-float 6s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+            .motion-enabled .motion-card-work { animation-delay: -2s; }
+            .motion-enabled .motion-card-shopping { animation-delay: -4s; }
+            .motion-enabled .motion-flow { animation: vault-data-flow 2.4s linear infinite; }
+            .motion-enabled .motion-shackle { transform-origin: 268px 220px; animation: vault-shackle-close 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+            .motion-enabled .motion-seal { stroke-dasharray: 480; animation: vault-seal 8s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+            .vault-preview .motion-layer { animation-play-state: paused; }
+            .vault-preview.motion-running .motion-layer { animation-play-state: running; }
+            .button svg, summary svg { transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+            .button:is(:hover, :focus-visible) svg { transform: translateX(3px); }
+        }
+        @media (max-width: 760px) {
+            .hero { grid-template-columns: 1fr; gap: 40px; padding-block: 56px; }
+            h1 { max-width: 12ch; }
+            .hero-copy { max-width: 42ch; font-size: 17px; }
+            .vault-preview { width: 100%; max-width: 480px; }
+            .steps { gap: 24px; }
+            .faq { grid-template-columns: 1fr; gap: 28px; }
+            .faq-intro { max-width: none; }
+        }
+        @media (max-width: 540px) {
+            .container { width: calc(100% - 40px); }
+            .header-inner { min-height: 76px; gap: 16px; }
+            .brand { font-size: 18px; gap: 8px; }
+            .brand img { width: 28px; height: 28px; }
+            .header-links { gap: 0; }
+            .header-section-link { display: none; }
+            .hero { padding-block: 40px; gap: 32px; }
+            .hero-copy { margin-top: 20px; }
+            .hero-actions { margin-top: 28px; gap: 20px; }
+            .hero-actions .button { width: 100%; }
+            .getting-started, .faq { padding-block: 40px; }
+            .steps { grid-template-columns: 1fr; gap: 24px; margin-top: 28px; }
+            .steps li { position: relative; padding-left: 32px; }
+            .steps li::before { position: absolute; top: 2px; left: 0; }
+            .steps p { max-width: none; }
+            .footer-inner { flex-direction: column; gap: 16px; }
+            .install-banner { right: 20px; bottom: 20px; width: calc(100% - 40px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            .button { transition: none; }
+        }
     </style>
 </head>
-<body class="bg-dark-bg bg-dots antialiased selection:bg-primary/20 selection:text-primary">
-
-    <!-- Ambient Glowing Spheres Background -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full glow-sphere"
-             style="background: radial-gradient(circle, #00E676 0%, transparent 65%); filter: blur(80px);"></div>
-        <div class="absolute top-[40%] -left-48 w-[500px] h-[500px] rounded-full glow-sphere"
-             style="background: radial-gradient(circle, #00C65E 0%, transparent 65%); filter: blur(100px); animation-delay: 2s;"></div>
-        <div class="absolute top-[75%] -right-48 w-[550px] h-[550px] rounded-full glow-sphere"
-             style="background: radial-gradient(circle, #00E676 0%, transparent 65%); filter: blur(100px); animation-delay: 4s;"></div>
-    </div>
-
-    <!-- ===== NAVIGATION BAR ===== -->
-    <header class="fixed top-0 left-0 right-0 z-50 glass-nav transition-all">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
-            <!-- Brand Logo -->
-            <a href="index.php" class="flex items-center gap-2.5 sm:gap-3 group">
-                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/15 border border-primary/40 flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-                    <img src="logo.svg" alt="SecureVault Logo" class="w-5 h-5 sm:w-6 sm:h-6">
-                </div>
-                <div class="flex flex-col">
-                    <span class="font-extrabold text-base sm:text-lg tracking-tight text-white flex items-center gap-1">
-                        SECURE<span class="text-primary font-black">VAULT</span>
-                    </span>
-                    <span class="text-[8px] sm:text-[9px] uppercase font-bold tracking-[0.2em] text-gray-400">Zero-Knowledge</span>
-                </div>
+<body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+        <div class="container header-inner">
+            <a class="brand" href="index.php" aria-label="SecureVault home">
+                <img src="logo.svg" alt="" width="34" height="34">
+                <div>Secure<span>Vault</span></div>
             </a>
-
-            <!-- Desktop Nav Links -->
-            <nav class="hidden lg:flex items-center gap-7 text-sm font-semibold text-gray-300">
-                <a href="#why" class="hover:text-primary transition-colors">Why SecureVault</a>
-                <a href="#features" class="hover:text-primary transition-colors">Features</a>
-                <a href="#crypto-demo" class="hover:text-primary transition-colors">Live Crypto</a>
-                <a href="#architecture" class="hover:text-primary transition-colors">Security Model</a>
-                <a href="#comparison" class="hover:text-primary transition-colors">Comparison</a>
-                <a href="#faq" class="hover:text-primary transition-colors">FAQ</a>
+            <nav class="header-links" aria-label="Main navigation">
+                <a class="quiet-link header-section-link" href="#how-it-works">How it works</a>
+                <a class="header-action" href="<?php echo $userLoggedIn ? 'dashboard.php' : 'login.php'; ?>"><?php echo $userLoggedIn ? 'My vault' : 'Sign in'; ?></a>
             </nav>
-
-            <!-- Nav Actions & Mobile Toggle -->
-            <div class="flex items-center gap-2 sm:gap-3">
-                <?php if ($userLoggedIn): ?>
-                    <a href="dashboard.php"
-                       class="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-dark-bg font-extrabold text-xs sm:text-sm tracking-wide shadow-lg shadow-primary/25 transition-all active:scale-95 flex items-center gap-1.5 sm:gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                        <span>Vault</span>
-                    </a>
-                <?php else: ?>
-                    <a href="login.php"
-                       class="px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs sm:text-sm font-bold text-gray-300 hover:text-white transition-colors">
-                        Sign In
-                    </a>
-                    <a href="login.php?register=1"
-                       class="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-dark-bg font-extrabold text-xs sm:text-sm tracking-wide shadow-lg shadow-primary/25 transition-all active:scale-95 flex items-center gap-1">
-                        <span>Get Started</span>
-                        <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
-                    </a>
-                <?php endif; ?>
-
-                <!-- Mobile Hamburger Button -->
-                <button type="button" onclick="toggleMobileNav()" id="mobileMenuBtn" aria-label="Toggle Navigation Menu"
-                        class="lg:hidden p-2 rounded-xl bg-dark-card border border-dark-border text-gray-400 hover:text-white transition-colors">
-                    <svg id="menuIconOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    <svg id="menuIconClose" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
-
-        <!-- Mobile Drawer Menu -->
-        <div id="mobileDrawer" class="hidden lg:hidden border-t border-dark-border/80 bg-dark-bg/95 backdrop-blur-xl px-4 py-4 space-y-3">
-            <a href="#why" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Why SecureVault</a>
-            <a href="#features" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Features</a>
-            <a href="#crypto-demo" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Live Cryptography</a>
-            <a href="#architecture" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Security Model</a>
-            <a href="#comparison" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">Comparison</a>
-            <a href="#faq" onclick="toggleMobileNav()" class="block py-2 text-sm font-semibold text-gray-300 hover:text-primary">FAQ</a>
         </div>
     </header>
 
-    <!-- ===== MAIN CONTENT ===== -->
-    <main class="relative z-10 pt-28 sm:pt-36">
-
-        <!-- Anti-Phishing Advisory Bar -->
-        <div class="max-w-4xl mx-auto px-4 mb-8">
-            <div class="p-3.5 rounded-2xl bg-yellow-950/30 border border-yellow-600/40 text-yellow-400 text-xs flex items-center justify-between gap-3 shadow-lg">
-                <div class="flex items-center gap-2.5">
-                    <svg class="w-4 h-4 text-yellow-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                    <span><strong>Official Verification:</strong> Official domain is <code class="font-bold text-yellow-300 bg-yellow-900/40 px-1.5 py-0.5 rounded">securevault.great-site.net</code>. Beware of fake phishing clones.</span>
+    <main id="main-content" class="container">
+        <section class="hero" aria-labelledby="hero-title">
+            <div>
+                <h1 id="hero-title"><?php echo $userLoggedIn ? 'Your vault is ready.' : 'Your passwords. One place.'; ?></h1>
+                <p class="hero-copy">Keep your logins organized and find the password you need, when you need it.</p>
+                <div class="hero-actions">
+                    <a class="button" href="<?php echo $userLoggedIn ? 'dashboard.php' : 'login.php?register=1'; ?>">
+                        <?php echo $userLoggedIn ? 'Open my vault' : 'Create account'; ?>
+                        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                    </a>
+                    <?php if (!$userLoggedIn): ?>
+                        <a class="text-link" href="login.php">Sign in instead</a>
+                    <?php endif; ?>
                 </div>
-                <a href="https://github.com/RonanStack24/SecureVault" target="_blank" rel="noopener noreferrer" class="hidden sm:inline-flex text-[11px] font-bold text-yellow-300 hover:underline shrink-0">Open Source on GitHub →</a>
-            </div>
-        </div>
-
-        <!-- ===== HERO SECTION ===== -->
-        <section class="max-w-6xl mx-auto px-4 sm:px-6 text-center pt-4 pb-16 sm:pb-24">
-            <!-- Security Tag -->
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-bold uppercase tracking-wider mb-6 shadow-sm">
-                <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-                <span>Zero-Knowledge Client-Side Cryptography</span>
+                <p class="hero-note">Free to use. Works in your browser.</p>
             </div>
 
-            <!-- Headline -->
-            <h1 class="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight max-w-4xl mx-auto leading-[1.1] mb-6">
-                Your Encrypted <span class="text-gradient">Digital Fortress</span> for Passwords.
-            </h1>
+            <figure id="vaultMotion" class="vault-preview" aria-labelledby="preview-caption">
+                <svg class="vault-scene" viewBox="0 0 500 440" width="500" height="440" role="img" aria-labelledby="motion-title" aria-describedby="motion-description">
+                    <title id="motion-title">Your logins, together in a vault</title>
+                    <desc id="motion-description">Three example login cards surround a central lock, connected by moving trails and orbiting rings. This is an illustration.</desc>
+                    <defs>
+                        <radialGradient id="vault-light">
+                            <stop stop-color="#17483B" stop-opacity="0.65"/>
+                            <stop offset="1" stop-color="#080E1A" stop-opacity="0"/>
+                        </radialGradient>
+                        <linearGradient id="vault-metal" x1="0" y1="0" x2="1" y2="1">
+                            <stop stop-color="#1B3D3A"/>
+                            <stop offset="1" stop-color="#0F1C2A"/>
+                        </linearGradient>
+                        <linearGradient id="vault-orbit-light" x1="0" y1="0" x2="1" y2="1">
+                            <stop stop-color="#00E676"/>
+                            <stop offset="1" stop-color="#00E676" stop-opacity="0.1"/>
+                        </linearGradient>
+                    </defs>
 
-            <!-- Subtitle -->
-            <p class="text-base sm:text-lg md:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed mb-10 font-normal">
-                Military-grade <strong class="text-gray-200">AES-256-GCM</strong> authenticated encryption powered directly by your browser's Web Crypto API. Your master key and credentials never leave your device unencrypted.
-            </p>
+                    <ellipse cx="250" cy="222" rx="210" ry="195" fill="url(#vault-light)"/>
+                    <circle cx="250" cy="222" r="166" fill="none" stroke="#233D44"/>
+                    <circle cx="250" cy="222" r="130" fill="none" stroke="#1C313D" stroke-dasharray="2 10"/>
+                    <g class="motion-orbit motion-layer">
+                        <circle cx="250" cy="222" r="166" fill="none" stroke="url(#vault-orbit-light)" stroke-width="2" stroke-linecap="round" stroke-dasharray="100 943"/>
+                        <circle cx="416" cy="222" r="4" fill="#75F4B7"/>
+                        <circle cx="84" cy="222" r="2.5" fill="#427D6C"/>
+                    </g>
+                    <g class="motion-orbit motion-orbit-inner motion-layer">
+                        <circle cx="250" cy="222" r="130" fill="none" stroke="#3B8D72" stroke-linecap="round" stroke-dasharray="48 769"/>
+                        <circle cx="380" cy="222" r="3" fill="#58C99C"/>
+                    </g>
 
-            <!-- Dual Action Buttons -->
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto mb-14">
-                <a href="<?php echo $userLoggedIn ? 'dashboard.php' : 'login.php'; ?>"
-                   class="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-primary-dark text-dark-bg font-extrabold text-sm rounded-2xl shadow-xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-                    <span><?php echo $userLoggedIn ? 'Launch Vault' : 'Unlock Your Vault'; ?></span>
-                </a>
-                <a href="#crypto-demo"
-                   class="w-full sm:w-auto px-7 py-4 bg-dark-card hover:bg-dark-surface text-gray-200 font-bold text-sm rounded-2xl border border-dark-border hover:border-primary/40 transition-all flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>Test Live Crypto</span>
-                </a>
-            </div>
+                    <path class="motion-route" d="M180 136C217 136 204 194 225 211"/>
+                    <path class="motion-route" d="M326 207C302 207 297 225 278 236"/>
+                    <path class="motion-route" d="M221 348C265 348 269 302 259 272"/>
+                    <path class="motion-flow motion-layer" d="M180 136C217 136 204 194 225 211"/>
+                    <path class="motion-flow motion-layer" d="M326 207C302 207 297 225 278 236"/>
+                    <path class="motion-flow motion-layer" d="M221 348C265 348 269 302 259 272"/>
 
-            <!-- Trust / Spec Badges -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto pt-6 border-t border-dark-border/80">
-                <div class="p-4 rounded-xl bg-dark-card/50 border border-dark-border text-center">
-                    <div class="text-xs font-bold text-primary mb-0.5">AES-256-GCM</div>
-                    <div class="text-[11px] text-gray-400">Authenticated Encryption</div>
-                </div>
-                <div class="p-4 rounded-xl bg-dark-card/50 border border-dark-border text-center">
-                    <div class="text-xs font-bold text-primary mb-0.5">PBKDF2 SHA-256</div>
-                    <div class="text-[11px] text-gray-400">100,000 Iterations</div>
-                </div>
-                <div class="p-4 rounded-xl bg-dark-card/50 border border-dark-border text-center">
-                    <div class="text-xs font-bold text-primary mb-0.5">Zero-Knowledge</div>
-                    <div class="text-[11px] text-gray-400">Client-Side Derivation</div>
-                </div>
-                <div class="p-4 rounded-xl bg-dark-card/50 border border-dark-border text-center">
-                    <div class="text-xs font-bold text-primary mb-0.5">Progressive Web App</div>
-                    <div class="text-[11px] text-gray-400">Installable Everywhere</div>
-                </div>
-            </div>
+                    <g>
+                        <polygon points="250,143 318,182 318,260 250,300 182,260 182,182" fill="url(#vault-metal)" stroke="#366D5C"/>
+                        <polygon class="motion-seal motion-layer" points="250,143 318,182 318,260 250,300 182,260 182,182" fill="none" stroke="#66E8AD" stroke-width="2" stroke-linejoin="round"/>
+                        <polygon points="250,158 305,190 305,252 250,285 195,252 195,190" fill="none" stroke="#2B514A"/>
+                        <path class="motion-shackle motion-layer" d="M232 222V204a18 18 0 0 1 36 0v18" fill="none" stroke="#B0F7D3" stroke-width="5" stroke-linecap="round"/>
+                        <rect x="222" y="220" width="56" height="43" rx="10" fill="#00E676"/>
+                        <circle cx="250" cy="237" r="4" fill="#103428"/>
+                        <path d="M250 240v7" stroke="#103428" stroke-width="3" stroke-linecap="round"/>
+                        <text class="motion-core-label" x="251" y="279" text-anchor="middle">VAULT</text>
+                    </g>
+
+                    <g class="motion-card motion-layer">
+                        <rect x="24" y="102" width="156" height="66" rx="12" fill="#142630" stroke="#34504D"/>
+                        <rect x="38" y="119" width="32" height="32" rx="8" fill="#244137"/>
+                        <g fill="none" stroke="#96E6BE" stroke-width="1.5" stroke-linejoin="round">
+                            <rect x="44" y="128" width="20" height="14" rx="2"/>
+                            <path d="m45 129 9 7 9-7"/>
+                        </g>
+                        <text class="motion-card-title" x="82" y="130">Email</text>
+                        <text class="motion-card-password" x="82" y="150">••••••</text>
+                    </g>
+                    <g class="motion-card motion-card-work motion-layer">
+                        <rect x="326" y="174" width="150" height="66" rx="12" fill="#142630" stroke="#34504D"/>
+                        <rect x="340" y="191" width="32" height="32" rx="8" fill="#244137"/>
+                        <g fill="none" stroke="#96E6BE" stroke-width="1.5" stroke-linejoin="round">
+                            <rect x="346" y="201" width="20" height="14" rx="2"/>
+                            <path d="M352 201v-4h8v4m-14 7h20m-10-2v4"/>
+                        </g>
+                        <text class="motion-card-title" x="384" y="202">Work</text>
+                        <text class="motion-card-password" x="384" y="222">••••••</text>
+                    </g>
+                    <g class="motion-card motion-card-shopping motion-layer">
+                        <rect x="59" y="315" width="162" height="66" rx="12" fill="#142630" stroke="#34504D"/>
+                        <rect x="73" y="332" width="32" height="32" rx="8" fill="#244137"/>
+                        <g fill="none" stroke="#96E6BE" stroke-width="1.5" stroke-linejoin="round">
+                            <path d="M80 343h18l-1 14H81l-1-14Zm4 0v-3a5 5 0 0 1 10 0v3"/>
+                        </g>
+                        <text class="motion-card-title" x="117" y="343">Shopping</text>
+                        <text class="motion-card-password" x="117" y="363">••••••</text>
+                    </g>
+                </svg>
+                <figcaption class="motion-controls">
+                    <span id="preview-caption">Illustrative vault animation</span>
+                    <button id="motionToggle" class="motion-toggle" type="button" hidden>Pause animation</button>
+                </figcaption>
+            </figure>
         </section>
 
-        <!-- ===== LIVE CRYPTOGRAPHY PLAYGROUND ===== -->
-        <section id="crypto-demo" class="max-w-5xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
-            <div class="p-6 sm:p-10 rounded-3xl glass-card relative overflow-hidden">
-                <div class="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full filter blur-3xl pointer-events-none"></div>
-
-                <div class="text-center max-w-2xl mx-auto mb-8">
-                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-wider mb-3">
-                        Interactive Live Demonstration
-                    </div>
-                    <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
-                        Inspect Real-Time WebCrypto Encryption
-                    </h2>
-                    <p class="text-xs sm:text-sm text-gray-400">
-                        Type any sample credential below. Your browser will execute real-time PBKDF2 key derivation and AES-256-GCM encryption client-side with 0 network calls.
-                    </p>
-                </div>
-
-                <!-- Interactive Demo Form -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">
-                                Plaintext Password (Simulated Input)
-                            </label>
-                            <input type="text" id="demoPlaintext" value="SuperSecretP@ssword2026!"
-                                   class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white text-sm focus:outline-none focus:border-primary transition-all font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">
-                                Master Key (Your Passphrase)
-                            </label>
-                            <input type="text" id="demoMasterKey" value="MyMasterVaultKey#99"
-                                   class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-white text-sm focus:outline-none focus:border-primary transition-all font-mono">
-                        </div>
-                        <button type="button" onclick="runCryptoDemo()"
-                                class="w-full py-3 bg-primary hover:bg-primary-dark text-dark-bg font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98]">
-                            ⚡ Re-Encrypt with Fresh 12-byte IV
-                        </button>
-                    </div>
-
-                    <!-- Live Ciphertext & Cryptographic Output -->
-                    <div class="bg-dark-bg/90 border border-dark-border rounded-2xl p-5 space-y-3 font-mono text-xs">
-                        <div class="flex items-center justify-between border-b border-dark-border pb-2 text-gray-400">
-                            <span class="font-bold text-gray-300">Client-Side Output Inspector</span>
-                            <span class="text-[10px] text-primary flex items-center gap-1">
-                                <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                                Local WebCrypto Active
-                            </span>
-                        </div>
-                        <div>
-                            <span class="text-gray-500 block text-[10px] uppercase font-bold">PBKDF2 Derived Key (AES-256):</span>
-                            <div id="demoKeyHash" class="text-gray-300 break-all bg-dark-card p-2 rounded border border-dark-border/60 mt-1">Generating…</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500 block text-[10px] uppercase font-bold">Initialization Vector (12 Bytes IV):</span>
-                            <div id="demoIv" class="text-yellow-400 break-all bg-dark-card p-2 rounded border border-dark-border/60 mt-1">Generating…</div>
-                        </div>
-                        <div>
-                            <span class="text-gray-500 block text-[10px] uppercase font-bold">Encrypted Payload Stored in DB (Base64):</span>
-                            <div id="demoCiphertext" class="text-primary break-all bg-dark-card p-2 rounded border border-dark-border/60 mt-1">Generating…</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-6 pt-4 border-t border-dark-border flex items-center justify-between text-[11px] text-gray-500">
-                    <span>* Notice how the ciphertext changes on every encrypt due to unique random IV generation.</span>
-                    <span class="text-primary font-semibold">Zero Plaintext Transmission Guaranteed</span>
-                </div>
-            </div>
+        <section id="how-it-works" class="getting-started" aria-labelledby="steps-title">
+            <h2 id="steps-title" data-scroll-reveal>Three steps to your first saved password.</h2>
+            <ol class="steps">
+                <li data-scroll-reveal><h3>Create your account</h3><p>Choose a master key. You’ll use it to sign in and unlock your passwords.</p></li>
+                <li data-scroll-reveal data-reveal-delay="90"><h3>Add your logins</h3><p>Save a username and password. Account passwords are encrypted in your browser before saving.</p></li>
+                <li data-scroll-reveal data-reveal-delay="180"><h3>Find what you need</h3><p>Search or browse by category, then enter your master key to reveal a password.</p></li>
+            </ol>
         </section>
 
-        <!-- ===== WHY SECUREVAULT SECTION ===== -->
-        <section id="why" class="max-w-6xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
-            <div class="text-center max-w-3xl mx-auto mb-14">
-                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-wider mb-3">
-                    The Zero-Knowledge Advantage
-                </div>
-                <h2 class="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
-                    Why Choose <span class="text-gradient">SecureVault</span>?
-                </h2>
-                <p class="text-gray-400 text-sm sm:text-base leading-relaxed">
-                    Most password managers store your encrypted credentials on proprietary cloud servers with recovery backdoors. SecureVault is engineered with a strict <strong class="text-white">zero-trust paradigm</strong>: we cannot access your data, ever.
-                </p>
+        <section class="faq" aria-labelledby="faq-title">
+            <div data-scroll-reveal>
+                <h2 id="faq-title">A few things to know.</h2>
+                <p class="faq-intro">The essentials before you get started.</p>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Reason 1 -->
-                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
-                    <div class="flex items-start gap-4">
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
-                            🔒
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">1. True Zero-Knowledge Architecture</h3>
-                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
-                                Your Master Password and plaintext credentials <strong>never touch our servers</strong>. All key derivation (100,000 PBKDF2 iterations) and AES-256-GCM encryption take place strictly in-memory in your local web browser. Even if our database were leaked, an attacker only gets indecipherable random ciphertext.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Reason 2 -->
-                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
-                    <div class="flex items-start gap-4">
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
-                            📴
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">2. 100% Offline Access via IndexedDB</h3>
-                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
-                                No internet? No cellular service? No problem. SecureVault automatically saves an encrypted copy of your vault into your device's native <strong>IndexedDB</strong>. You can open the PWA on an airplane or during an outage and decrypt your passwords seamlessly offline.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Reason 3 -->
-                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
-                    <div class="flex items-start gap-4">
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
-                            ⚡
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">3. Installable PWA with Zero Bloat</h3>
-                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
-                                Avoid downloading bulky 300MB native desktop programs or invasive browser extensions. SecureVault is an ultra-lightweight <strong>Progressive Web App (PWA)</strong> that installs directly to your home screen or desktop in one tap with native-like fluidity.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Reason 4 -->
-                <div class="p-8 rounded-3xl glass-card border border-dark-border hover:border-primary/40 transition-all group">
-                    <div class="flex items-start gap-4">
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform">
-                            🛡️
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-white mb-2 group-hover:text-primary transition-colors">4. Military-Grade Authenticated Cryptography</h3>
-                            <p class="text-gray-400 text-xs sm:text-sm leading-relaxed">
-                                Every single credential entry is protected by dynamic <strong>12-byte cryptographically secure random IVs</strong>, 16-byte Galois authentication tags, and temporary in-memory auto-masking after 30 seconds to prevent shoulder surfing.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ===== CORE SECURITY PILLARS ===== -->
-        <section id="features" class="max-w-6xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
-            <div class="text-center max-w-2xl mx-auto mb-14">
-                <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">
-                    Architected for <span class="text-gradient">Absolute Privacy</span>
-                </h2>
-                <p class="text-gray-400 text-sm sm:text-base">
-                    Every design decision in SecureVault prioritizes mathematical security, privacy, and zero trust boundaries.
-                </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Pillar 1 -->
-                <div class="p-7 rounded-3xl glass-card flex flex-col justify-between transition-all">
-                    <div>
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary mb-6 shadow-md shadow-primary/10">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                        </div>
-                        <h3 class="text-lg font-bold text-white mb-2">Zero-Knowledge Architecture</h3>
-                        <p class="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
-                            Your master password is never stored or transmitted. Encryption keys are generated solely inside your browser using 100,000 rounds of PBKDF2 key stretching.
-                        </p>
-                    </div>
-                    <span class="text-xs text-primary font-bold">End-to-End Encrypted →</span>
-                </div>
-
-                <!-- Pillar 2 -->
-                <div class="p-7 rounded-3xl glass-card flex flex-col justify-between transition-all">
-                    <div>
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary mb-6 shadow-md shadow-primary/10">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                        </div>
-                        <h3 class="text-lg font-bold text-white mb-2">Installable Native PWA</h3>
-                        <p class="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
-                            Install directly to your iOS, Android, macOS, or Windows home screen. Enjoy rapid load times, offline cache assets, and native app aesthetics.
-                        </p>
-                    </div>
-                    <span class="text-xs text-primary font-bold">Cross-Platform Ready →</span>
-                </div>
-
-                <!-- Pillar 3 -->
-                <div class="p-7 rounded-3xl glass-card flex flex-col justify-between transition-all">
-                    <div>
-                        <div class="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary mb-6 shadow-md shadow-primary/10">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        </div>
-                        <h3 class="text-lg font-bold text-white mb-2">Anti-Phishing Verification</h3>
-                        <p class="text-gray-400 text-xs sm:text-sm leading-relaxed mb-4">
-                            Built-in origin security advisories protect users from spoofed domains and man-in-the-middle credential harvesting attempts.
-                        </p>
-                    </div>
-                    <span class="text-xs text-primary font-bold">Strict Origin Guard →</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- ===== SECURITY ARCHITECTURE & INFOGRAPHIC ===== -->
-        <section id="architecture" class="max-w-6xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                <!-- Text Details -->
-                <div class="lg:col-span-6 space-y-6">
-                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
-                        Cryptographic Pipeline
-                    </div>
-                    <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                        How SecureVault Protects Your Credentials
-                    </h2>
-                    <p class="text-gray-400 text-sm leading-relaxed">
-                        Conventional cloud vaults often decrypt data in their cloud workers. In SecureVault, the cloud server is treated as an untrusted ciphertext storage layer.
-                    </p>
-
-                    <!-- Step-by-step -->
-                    <div class="space-y-4 pt-2">
-                        <div class="flex items-start gap-4 p-4 rounded-2xl bg-dark-card border border-dark-border">
-                            <div class="w-8 h-8 rounded-xl bg-primary/20 text-primary font-bold text-sm flex items-center justify-center shrink-0">1</div>
-                            <div>
-                                <h4 class="text-sm font-bold text-white">Client Key Derivation</h4>
-                                <p class="text-xs text-gray-400 mt-0.5">Master key + unique salt are hashed locally via PBKDF2 (SHA-256) into a 256-bit AES cryptographic key.</p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-start gap-4 p-4 rounded-2xl bg-dark-card border border-dark-border">
-                            <div class="w-8 h-8 rounded-xl bg-primary/20 text-primary font-bold text-sm flex items-center justify-center shrink-0">2</div>
-                            <div>
-                                <h4 class="text-sm font-bold text-white">AES-256-GCM Local Encryption</h4>
-                                <p class="text-xs text-gray-400 mt-0.5">A 96-bit cryptographically secure IV is generated per secret. GCM mode ensures tamper-proof authenticity.</p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-start gap-4 p-4 rounded-2xl bg-dark-card border border-dark-border">
-                            <div class="w-8 h-8 rounded-xl bg-primary/20 text-primary font-bold text-sm flex items-center justify-center shrink-0">3</div>
-                            <div>
-                                <h4 class="text-sm font-bold text-white">Encrypted Transmission</h4>
-                                <p class="text-xs text-gray-400 mt-0.5">Only IV + Ciphertext + Tag are stored in MySQL. Even with full database access, an attacker cannot decrypt credentials.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Infographic Image Card -->
-                <div class="lg:col-span-6">
-                    <div class="p-3 rounded-3xl bg-dark-card border border-dark-border shadow-2xl overflow-hidden group">
-                        <div class="relative rounded-2xl overflow-hidden bg-dark-bg/80">
-                            <img src="securevault-infographic.png" alt="SecureVault Security Infographic" class="w-full h-auto object-cover rounded-2xl group-hover:scale-[1.01] transition-transform duration-300">
-                            <div class="absolute bottom-3 left-3 right-3 bg-dark-bg/90 backdrop-blur-md p-3 rounded-xl border border-dark-border/80 flex items-center justify-between text-xs">
-                                <span class="text-gray-300 font-semibold">Zero-Knowledge Workflow Diagram</span>
-                                <span class="text-primary font-mono text-[10px]">VERIFIED 100% CLIENT-SIDE</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ===== COMPARISON MATRIX ===== -->
-        <section id="comparison" class="max-w-5xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
-            <div class="text-center max-w-2xl mx-auto mb-12">
-                <h2 class="text-3xl font-extrabold tracking-tight mb-3">
-                    How SecureVault Compares
-                </h2>
-                <p class="text-gray-400 text-sm">
-                    Why privacy-conscious developers and power users choose SecureVault.
-                </p>
-            </div>
-
-            <div class="overflow-x-auto rounded-3xl border border-dark-border bg-dark-card/60 backdrop-blur-md">
-                <table class="w-full text-left text-xs sm:text-sm">
-                    <thead>
-                        <tr class="border-b border-dark-border bg-dark-surface/50 text-gray-400">
-                            <th class="p-4 sm:p-5 font-bold">Feature / Security Standard</th>
-                            <th class="p-4 sm:p-5 font-extrabold text-primary">SecureVault (PWA)</th>
-                            <th class="p-4 sm:p-5 font-semibold text-gray-400">Generic Cloud Managers</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-dark-border text-gray-300">
-                        <tr>
-                            <td class="p-4 sm:p-5 font-medium text-white">Client-Side WebCrypto Derivation</td>
-                            <td class="p-4 sm:p-5 text-primary font-bold">✅ 100% In-Browser</td>
-                            <td class="p-4 sm:p-5 text-gray-400">⚠️ Often Cloud-Processed</td>
-                        </tr>
-                        <tr>
-                            <td class="p-4 sm:p-5 font-medium text-white">Encryption Algorithm</td>
-                            <td class="p-4 sm:p-5 text-primary font-bold">✅ AES-256-GCM + PBKDF2</td>
-                            <td class="p-4 sm:p-5 text-gray-400">AES-256-CBC or proprietary</td>
-                        </tr>
-                        <tr>
-                            <td class="p-4 sm:p-5 font-medium text-white">Open Source Codebase</td>
-                            <td class="p-4 sm:p-5 text-primary font-bold">✅ 100% Open & Auditable</td>
-                            <td class="p-4 sm:p-5 text-red-400">❌ Closed Proprietary</td>
-                        </tr>
-                        <tr>
-                            <td class="p-4 sm:p-5 font-medium text-white">PWA Home Screen Install</td>
-                            <td class="p-4 sm:p-5 text-primary font-bold">✅ Instant No-Store Install</td>
-                            <td class="p-4 sm:p-5 text-gray-400">⚠️ Bloated App Store Downloads</td>
-                        </tr>
-                        <tr>
-                            <td class="p-4 sm:p-5 font-medium text-white">Telemetry & Ad Trackers</td>
-                            <td class="p-4 sm:p-5 text-primary font-bold">✅ Zero Tracking / No Cookies</td>
-                            <td class="p-4 sm:p-5 text-red-400">❌ Heavy Analytics Trackers</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ===== FREQUENTLY ASKED QUESTIONS ===== -->
-        <section id="faq" class="max-w-4xl mx-auto px-4 sm:px-6 py-16 scroll-mt-24">
-            <div class="text-center max-w-2xl mx-auto mb-12">
-                <h2 class="text-3xl font-extrabold tracking-tight mb-3">
-                    Frequently Asked Questions
-                </h2>
-                <p class="text-gray-400 text-sm">
-                    Everything you need to know about our security architecture and master keys.
-                </p>
-            </div>
-
-            <div class="space-y-4">
-                <!-- FAQ 1 -->
-                <details class="group rounded-2xl bg-dark-card border border-dark-border p-5 transition-all">
-                    <summary class="flex items-center justify-between font-bold text-white text-sm cursor-pointer list-none">
-                        <span>Can SecureVault or any server administrator read my stored passwords?</span>
-                        <svg class="w-5 h-5 text-primary transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </summary>
-                    <p class="mt-3 text-xs sm:text-sm text-gray-400 leading-relaxed">
-                        No. Plaintext passwords never leave your web browser. All cryptographic operations occur on your device via the native browser WebCrypto API before any data is sent over the network. The server only receives encrypted ciphertexts and random authentication tags.
-                    </p>
+            <div class="faq-list">
+                <details data-scroll-reveal="faq">
+                    <summary>What is my master key?<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></summary>
+                    <p>It’s the password you choose when creating your SecureVault account. You’ll need it to sign in and reveal saved passwords. Keep it somewhere safe; there’s no forgotten-password reset.</p>
                 </details>
-
-                <!-- FAQ 2 -->
-                <details class="group rounded-2xl bg-dark-card border border-dark-border p-5 transition-all">
-                    <summary class="flex items-center justify-between font-bold text-white text-sm cursor-pointer list-none">
-                        <span>What happens if I lose or forget my Master Key?</span>
-                        <svg class="w-5 h-5 text-primary transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </summary>
-                    <p class="mt-3 text-xs sm:text-sm text-gray-400 leading-relaxed">
-                        Because SecureVault is zero-knowledge, nobody (including us) possesses a master recovery backdoor. If you lose your master key, the encrypted vault cannot be decrypted. We recommend memorizing your master passphrase or keeping a physical offline backup.
-                    </p>
+                <details data-scroll-reveal="faq" data-reveal-delay="80">
+                    <summary>Can I use my vault offline?<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></summary>
+                    <p>Open your vault online first to save an encrypted copy on this device. You can then open the saved vault and reveal passwords in the same browser while offline. Signing in, saving changes, and deleting accounts need an internet connection.</p>
                 </details>
-
-                <!-- FAQ 3 -->
-                <details class="group rounded-2xl bg-dark-card border border-dark-border p-5 transition-all">
-                    <summary class="flex items-center justify-between font-bold text-white text-sm cursor-pointer list-none">
-                        <span>How do I install SecureVault as a Progressive Web App (PWA)?</span>
-                        <svg class="w-5 h-5 text-primary transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </summary>
-                    <p class="mt-3 text-xs sm:text-sm text-gray-400 leading-relaxed">
-                        On mobile (iOS Safari / Android Chrome), tap <strong>Share</strong> or <strong>Browser Menu (⋮)</strong> and select <strong>"Add to Home Screen"</strong>. On Desktop Chrome/Edge, click the install icon in the URL address bar to install SecureVault as a standalone desktop app.
-                    </p>
-                </details>
-
-                <!-- FAQ 4 -->
-                <details class="group rounded-2xl bg-dark-card border border-dark-border p-5 transition-all">
-                    <summary class="flex items-center justify-between font-bold text-white text-sm cursor-pointer list-none">
-                        <span>Is the source code open for public inspection?</span>
-                        <svg class="w-5 h-5 text-primary transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </summary>
-                    <p class="mt-3 text-xs sm:text-sm text-gray-400 leading-relaxed">
-                        Yes! SecureVault is 100% open source. You can inspect all frontend scripts, encryption routines, and backend endpoints on our official <a href="https://github.com/RonanStack24/SecureVault" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline font-semibold">GitHub Repository</a>.
-                    </p>
+                <details data-scroll-reveal="faq" data-reveal-delay="160">
+                    <summary>Do I need to install anything?<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></summary>
+                    <p>No. Use SecureVault in your browser, or choose Install app when your browser offers it for a shortcut on your home screen or desktop.</p>
                 </details>
             </div>
         </section>
-
-        <!-- ===== BOTTOM CALL TO ACTION ===== -->
-        <section class="max-w-5xl mx-auto px-4 sm:px-6 py-20">
-            <div class="p-8 sm:p-14 rounded-3xl bg-gradient-to-br from-dark-card via-dark-surface to-primary/10 border border-primary/30 text-center relative overflow-hidden shadow-2xl">
-                <div class="relative z-10 max-w-2xl mx-auto">
-                    <div class="w-14 h-14 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary mx-auto mb-6 shadow-lg shadow-primary/20">
-                        <img src="logo.svg" alt="Logo" class="w-8 h-8">
-                    </div>
-                    <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-4">
-                        Secure Your Digital Life in Seconds.
-                    </h2>
-                    <p class="text-gray-300 text-sm sm:text-base leading-relaxed mb-8">
-                        Experience the peace of mind that comes with zero-knowledge cryptography. Free, open source, and accessible from any device.
-                    </p>
-                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <a href="<?php echo $userLoggedIn ? 'dashboard.php' : 'login.php?register=1'; ?>"
-                           class="w-full sm:w-auto px-8 py-4 bg-primary hover:bg-primary-dark text-dark-bg font-extrabold text-sm rounded-2xl shadow-xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                            <?php echo $userLoggedIn ? 'Go to Vault' : 'Create Free Secure Vault'; ?>
-                        </a>
-                        <a href="<?php echo $userLoggedIn ? 'dashboard.php' : 'login.php'; ?>"
-                           class="w-full sm:w-auto px-8 py-4 bg-dark-bg text-gray-200 font-bold text-sm rounded-2xl border border-dark-border hover:border-primary/40 transition-all">
-                            <?php echo $userLoggedIn ? 'Dashboard' : 'Sign In'; ?>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </section>
-
     </main>
 
-    <!-- ===== FOOTER ===== -->
-    <footer class="border-t border-dark-border/80 bg-dark-bg py-12 text-gray-400 text-xs relative z-10">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-                    <img src="logo.svg" alt="Logo" class="w-5 h-5">
-                </div>
-                <div>
-                    <span class="font-extrabold text-white tracking-tight">SECURE<span class="text-primary font-black">VAULT</span></span>
-                    <p class="text-[10px] text-gray-500">Zero-Knowledge Personal Vault · v1.3 PWA Edition</p>
-                </div>
+    <footer class="site-footer">
+        <div class="container footer-inner" data-scroll-reveal>
+            <div>
+                <p>SecureVault · Made by Ronan Antoque</p>
+                <p class="official-site">Before signing in, check the address: securevault.great-site.net</p>
             </div>
-
-            <div class="flex flex-wrap items-center justify-center gap-6 font-semibold">
-                <a href="#features" class="hover:text-primary transition-colors">Features</a>
-                <a href="#crypto-demo" class="hover:text-primary transition-colors">Crypto Demo</a>
-                <a href="#architecture" class="hover:text-primary transition-colors">Security Architecture</a>
-                <a href="https://github.com/RonanStack24/SecureVault" target="_blank" rel="noopener noreferrer" class="hover:text-primary transition-colors flex items-center gap-1.5">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
-                    GitHub
-                </a>
-            </div>
-
-            <div class="text-[11px] text-gray-500">
-                Created by <strong class="text-gray-300">Ronan Antoque</strong> · Protected under MIT License
+            <div class="footer-links">
+                <a class="quiet-link" href="#how-it-works">How it works</a>
+                <a class="quiet-link" href="https://github.com/RonanStack24/SecureVault" target="_blank" rel="noopener noreferrer">Source code</a>
             </div>
         </div>
     </footer>
 
-    <!-- ===== CLIENT-SIDE WEBCRYPTO DEMO ENGINE & MOBILE NAV ===== -->
+    <!-- Keep the shared PWA install hooks available when the browser offers installation. -->
+    <aside id="installBanner" class="install-banner hidden" aria-label="Install SecureVault">
+        <div>
+            <p>Keep SecureVault a tap away.</p>
+            <button type="button" class="button" onclick="installApp()">Install app</button>
+        </div>
+        <button type="button" class="dismiss-install" onclick="dismissInstallBanner()" aria-label="Dismiss installation suggestion">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="m6 6 12 12M6 18 18 6"/></svg>
+        </button>
+    </aside>
     <script>
-        function toggleMobileNav() {
-            const drawer = document.getElementById('mobileDrawer');
-            const iconOpen = document.getElementById('menuIconOpen');
-            const iconClose = document.getElementById('menuIconClose');
-            if (drawer) {
-                const isClosed = drawer.classList.contains('hidden');
-                drawer.classList.toggle('hidden', !isClosed);
-                if (iconOpen) iconOpen.classList.toggle('hidden', isClosed);
-                if (iconClose) iconClose.classList.toggle('hidden', !isClosed);
-            }
-        }
+        (() => {
+            const scene = document.getElementById('vaultMotion');
+            const toggle = document.getElementById('motionToggle');
+            if (!scene || !toggle || !('IntersectionObserver' in window)) return;
 
-        async function deriveDemoKey(passphrase, saltHex) {
-            const enc = new TextEncoder();
-            const keyMaterial = await window.crypto.subtle.importKey(
-                "raw", enc.encode(passphrase), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]
-            );
-            const saltBytes = enc.encode(saltHex);
-            return window.crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: saltBytes, iterations: 100000, hash: "SHA-256" },
-                keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
-            );
-        }
+            const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+            const activeReveals = new Set();
+            let visible = false;
+            let paused = false;
+            const updateMotion = () => {
+                scene.classList.toggle('motion-enabled', !reducedMotion.matches);
+                scene.classList.toggle('motion-running', visible && !document.hidden && !paused && !reducedMotion.matches);
+                toggle.hidden = reducedMotion.matches;
+                toggle.textContent = paused ? 'Play animation' : 'Pause animation';
+                if (paused || reducedMotion.matches || document.hidden) {
+                    activeReveals.forEach(animation => animation.finish());
+                }
+            };
 
-        function bufToHex(buffer) {
-            return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        function bufToBase64(buffer) {
-            let binary = '';
-            const bytes = new Uint8Array(buffer);
-            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-            return window.btoa(binary);
-        }
-
-        async function runCryptoDemo() {
-            try {
-                const plaintext = document.getElementById('demoPlaintext').value || 'SecureSecret!';
-                const masterKey = document.getElementById('demoMasterKey').value || 'MasterVaultKey123';
-                const saltHex = "a1b2c3d4e5f60718293a4b5c6d7e8f90"; // sample fixed salt for demo
-
-                const enc = new TextEncoder();
-                const key = await deriveDemoKey(masterKey, saltHex);
-
-                // Export key bits for inspection
-                const rawKeyBits = await window.crypto.subtle.exportKey("raw", key);
-                document.getElementById('demoKeyHash').textContent = bufToHex(rawKeyBits).substring(0, 32) + '… (256-bit AES Key)';
-
-                // 12-byte random IV
-                const iv = window.crypto.getRandomValues(new Uint8Array(12));
-                document.getElementById('demoIv').textContent = bufToHex(iv) + ' (96 bits)';
-
-                // Authenticated AES-GCM encryption
-                const encrypted = await window.crypto.subtle.encrypt(
-                    { name: "AES-GCM", iv: iv }, key, enc.encode(plaintext)
-                );
-
-                const result = new Uint8Array(iv.length + encrypted.byteLength);
-                result.set(iv, 0);
-                result.set(new Uint8Array(encrypted), iv.length);
-
-                document.getElementById('demoCiphertext').textContent = bufToBase64(result);
-            } catch (err) {
-                console.error("Crypto Demo Error:", err);
-            }
-        }
-
-        // Run once on initial load
-        document.addEventListener('DOMContentLoaded', runCryptoDemo);
+            // Animate on entry without hiding content before JavaScript or observation succeeds.
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.target === scene) {
+                        visible = entry.isIntersecting;
+                        updateMotion();
+                    } else if (entry.isIntersecting) {
+                        const target = entry.target;
+                        observer.unobserve(target);
+                        if (reducedMotion.matches || paused || document.hidden || !target.animate || target.contains(document.activeElement)) return;
+                        const animation = target.animate([
+                            { opacity: 0.8, transform: target.dataset.scrollReveal === 'faq' ? 'translateX(20px)' : 'translateY(28px)' },
+                            { opacity: 1, transform: 'none' }
+                        ], {
+                            duration: 620,
+                            delay: Number(target.dataset.revealDelay) || 0,
+                            easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+                            fill: 'backwards'
+                        });
+                        activeReveals.add(animation);
+                        animation.onfinish = () => activeReveals.delete(animation);
+                    }
+                });
+            }, { threshold: 0.05 });
+            observer.observe(scene);
+            document.querySelectorAll('[data-scroll-reveal]').forEach(target => observer.observe(target));
+            toggle.addEventListener('click', () => { paused = !paused; updateMotion(); });
+            reducedMotion.addEventListener('change', updateMotion);
+            document.addEventListener('visibilitychange', updateMotion);
+            updateMotion();
+        })();
     </script>
     <script src="js/pwa.js"></script>
 </body>
