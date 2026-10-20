@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title description">
+  <title id="title">SecureVault — alternative logo</title>
+  <desc id="description">A mint S on a dark vault door, with two hinges and a chamfered lower-right corner.</desc>
+  <!-- Flat, two-color mark on a 96-unit grid; transparent outside the door. -->
+  <path d="M24 12H72A12 12 0 0 1 84 24V62L62 84H24A12 12 0 0 1 12 72V24A12 12 0 0 1 24 12Z" fill="#0f1419" stroke="#1dd1a1" stroke-width="4"/>
+  <g fill="#1dd1a1">
+    <rect x="8" y="27" width="12" height="6" rx="2"/>
+    <rect x="8" y="57" width="12" height="6" rx="2"/>
+  </g>
+  <path d="M62 30H42A9 9 0 0 0 42 48H54A9 9 0 0 1 54 66H34" fill="none" stroke="#1dd1a1" stroke-width="6" stroke-linecap="round"/>
+</svg>
