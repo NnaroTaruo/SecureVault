@@ -1,0 +1,11 @@
+# Contributing to SecureVault
+
+1. Fork the repository, create a branch, and follow the local setup in [README.md](README.md).
+2. Keep changes small and explain the problem they solve. Use sample data only.
+3. Read [AGENTS.md](AGENTS.md) for architecture and encryption requirements. Check actual behavior against [SECURITY.md](SECURITY.md); some intended guarantees are not implemented yet.
+4. Run `php -l path/to/changed.php` for each changed PHP file and `php tests/auth-privacy.php`. Check the affected flow in your browser. For vault changes, also verify offline access after an online sync.
+5. Open a pull request describing the change and how you checked it.
+
+Never commit `config.php`, real SQL dumps, passwords, authentication logs, or hosting credentials. Do not change key derivation, salts, or the encrypted data format without a migration that preserves existing vault access.
+
+By contributing your own work, you agree that it is available under the project's [MIT license](LICENSE). Identify any third-party code or assets and preserve their license notices.

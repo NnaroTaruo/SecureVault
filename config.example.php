@@ -23,6 +23,8 @@ define('SESSION_NAME', 'securevault_session');
 
 // Site Settings
 define('SITE_NAME', 'SecureVault');
+define('SITE_URL', 'http://localhost/SecureVault/'); // Use your HTTPS URL in production
+define('MAINTENANCE_MODE', false);
 
 // Security
 define('MAX_LOGIN_ATTEMPTS', 5);

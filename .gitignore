@@ -1,6 +1,11 @@
 # Sensitive config - NEVER commit this
 config.php
 
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
 # Database blueprint - keep off GitHub
 database.sql
 
