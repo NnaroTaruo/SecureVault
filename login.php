@@ -20,6 +20,13 @@ $flash        = getFlashMessage();
 $message      = $flash['message'];
 $messageType  = $flash['type'];
 
+if (empty($message) && isset($_GET['key_changed'])) {
+    $message = isset($_GET['offline_refresh'])
+        ? 'Your master key changed. Sign in online with your new key to refresh offline access.'
+        : 'Your master key changed. Sign in with your new key.';
+    $messageType = 'info';
+}
+
 if (empty($message) && isset($_GET['timeout'])) {
     $message     = '🔒 Your session expired due to 5 minutes of inactivity. Please sign in again.';
     $messageType = 'info';

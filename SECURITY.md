@@ -5,12 +5,13 @@ SecureVault is experimental and has not had an independent security audit. Use s
 Saved account passwords use browser-side AES-256-GCM with PBKDF2/SHA-256 (100,000 iterations). However:
 
 - Authentication still sends the master password to PHP, so the app is not fully zero-knowledge.
-- Master-password migration is not yet reliable. Entries can still require the previous key, including when the local offline copy is incomplete or stale.
+- Master-key changes require an online connection, working browser storage, and Web Locks support. The complete current vault is re-encrypted in the browser and saved with the sign-in hash in one InnoDB transaction. Missing or stale entries are rejected, and all sessions are signed out afterward.
+- Existing offline copies on other devices do not update until those devices sign in online again. Interrupted or unconfirmed changes block this browser's stale offline copy until an online sign-in and sync.
 - Service names, usernames, URLs, notes, and categories are not encrypted.
 - Offline browser storage and cache isolation between users need further review. Use a separate browser profile for each user.
-- CSRF protection, login throttling, and verification of the key before saving need further work.
+- CSRF coverage on other authentication actions, login throttling, and verification of the key before ordinary account saves need further work. Vault writes and master-key changes require a session CSRF token.
 
-Do not change an existing vault's master password as a recovery shortcut. Keep access to the original key until a tested migration is available.
+Changing the master key cannot repair entries already encrypted with a different or lost key. Keep any original keys needed for older encrypted backups.
 
 Authentication request bodies must never be logged. Removing old logs or rewriting Git history does not invalidate captured passwords; replace any real credentials that were recorded or reused.
 

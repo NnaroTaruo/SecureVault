@@ -10,4 +10,6 @@ Never commit `config.php`, real SQL dumps, passwords, authentication logs, or ho
 
 After a repository history cleanup, clone the repository again. Merging or pushing an old clone can restore the removed logs.
 
+For password-change work, also run `node tests/master-password-change.cjs`. It starts an isolated sample MariaDB database, PHP servers, and headless Chrome; it never uses your private configuration or vault. Defaults target XAMPP and Chrome on Windows; override `SV_TEST_PHP`, `SV_TEST_MYSQL_BIN`, or `SV_TEST_CHROME` for other installation paths.
+
 By contributing your own work, you agree that it is available under the project's [MIT license](LICENSE). Identify any third-party code or assets and preserve their license notices.

@@ -5,6 +5,7 @@
 
 // Prevent any output before JSON header
 ob_start();
+header('Cache-Control: no-store');
 
 require_once '../config.php';
 require_once '../auth.php';
@@ -20,28 +21,25 @@ if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
 
 // Set error handling
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
-    ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
+    http_response_code(500);
     header('Content-Type: application/json');
     error_log("API Error: $errstr in $errfile:$errline");
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $errstr]);
+    echo json_encode(['success' => false, 'message' => 'Server error']);
     exit;
 });
 
 set_exception_handler(function($e) {
-    ob_end_clean();
+    if (ob_get_level()) ob_end_clean();
+    http_response_code(500);
     header('Content-Type: application/json');
     error_log("API Exception: " . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Server error']);
     exit;
 });
 
-try {
-    requireLogin();
-} catch (Exception $e) {
-    ob_end_clean();
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Not authenticated']);
-    exit;
+if (!isLoggedIn() || !verifySession()) {
+    jsonResponse(false, 'Not authenticated', null, 401);
 }
 
 header('Content-Type: application/json');
@@ -52,13 +50,25 @@ $action = isset($_GET['action']) ? sanitize($_GET['action']) : (isset($_POST['ac
 
 $userId = getCurrentUserId();
 $db = Database::getInstance()->getConnection();
-$stmt = $db->prepare('SELECT master_key_salt FROM users WHERE id = ?');
+$isVaultWrite = in_array($action, ['add_account', 'update', 'update_account', 'delete_account'], true);
+if ($isVaultWrite) {
+    $csrfToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!is_string($csrfToken) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $csrfToken)) {
+        jsonResponse(false, 'Reload the vault before saving changes.', null, 403);
+    }
+    $db->begin_transaction();
+}
+$stmt = $db->prepare('SELECT master_key_salt FROM users WHERE id = ?' . ($isVaultWrite ? ' FOR UPDATE' : ''));
 $stmt->bind_param('i', $userId);
 $stmt->execute();
 $userResult = $stmt->get_result();
 
 if ($userResult->num_rows === 0) {
     jsonResponse(false, 'User not found', null, 401);
+}
+if ($isVaultWrite && !verifySession()) {
+    $db->rollback();
+    jsonResponse(false, 'Your session expired. Sign in again.', null, 401);
 }
 
 $userRow = $userResult->fetch_assoc();
@@ -148,8 +158,10 @@ switch ($action) {
         $stmt->bind_param('isssiss', $userId, $serviceName, $username, $encryptedPassword, $categoryId, $websiteUrl, $notes);
         
         if ($stmt->execute()) {
+            $db->commit();
             jsonResponse(true, 'Account added successfully', ['id' => $db->insert_id]);
         } else {
+            $db->rollback();
             jsonResponse(false, 'Failed to add account', null, 500);
         }
         break;
@@ -176,8 +188,10 @@ switch ($action) {
         $stmt->bind_param('sssissii', $serviceName, $username, $encryptedPassword, $categoryId, $websiteUrl, $notes, $accountId, $userId);
         
         if ($stmt->execute()) {
+            $db->commit();
             jsonResponse(true, 'Account updated successfully');
         } else {
+            $db->rollback();
             jsonResponse(false, 'Failed to update account', null, 500);
         }
         break;
@@ -189,6 +203,8 @@ switch ($action) {
         
         $accountId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
         $result = deleteAccount($userId, $accountId);
+        if ($result['success']) $db->commit();
+        else $db->rollback();
         jsonResponse($result['success'], $result['message'], null, $result['success'] ? 200 : 400);
         break;
     

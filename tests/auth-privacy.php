@@ -12,8 +12,10 @@ copy(__DIR__ . '/../api/auth.php', $directory . '/api/auth.php');
 file_put_contents($directory . '/config.php', '<?php');
 file_put_contents($directory . '/auth.php', <<<'PHP'
 <?php
+$_SESSION = ['csrf_token' => 'dummy-csrf-check'];
 function sanitize($value) { return trim($value); }
 function isLoggedIn() { return true; }
+function verifySession() { return true; }
 function getCurrentUserId() { return 1; }
 function loginUser(...$args) { return ['success' => false, 'message' => 'Invalid credentials']; }
 function registerUser(...$args) { return ['success' => true, 'message' => 'Registered']; }
@@ -27,9 +29,11 @@ PHP);
 try {
     foreach (['login' => 401, 'register' => 200, 'update_master_password' => 200] as $action => $status) {
         $script = '$_SERVER["REQUEST_METHOD"] = "POST";'
+            . '$_SERVER["HTTP_X_CSRF_TOKEN"] = "dummy-csrf-check";'
             . '$_SERVER["REQUEST_URI"] = "/api/auth.php?action=' . $action . '";'
             . '$_GET["action"] = "' . $action . '";'
             . '$_POST = array_fill_keys(["password", "confirm_password", "old_password", "new_password"], "dummy-privacy-check");'
+            . '$_POST["accounts"] = "[]";'
             . 'require "auth.php";';
         $process = proc_open([PHP_BINARY, '-r', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory . '/api');
         if (!is_resource($process)) {
