@@ -1,10 +1,19 @@
-# SecureVault
+# <img src="logo.svg" width="40" height="40" alt=""> SecureVault
 
 A personal password manager built with PHP, MySQL, and browser-based encryption. Save your logins, organize them by category, and access previously synced passwords offline.
 
 Built by Ronan Antoque after his mom kept forgetting her passwords.
 
 [Live site](https://securevault.great-site.net/)
+
+<details>
+<summary>Alternative logo</summary>
+
+<img src="assets/securevault-logo-alternative.svg" width="112" height="112" alt="Alternative SecureVault logo: a mint S inside a dark vault door">
+
+A compact vault door built around the letter **S**. [Download the editable SVG](assets/securevault-logo-alternative.svg).
+
+</details>
 
 ## Features
 
