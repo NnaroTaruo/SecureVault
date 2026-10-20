@@ -412,7 +412,7 @@ $userLoggedIn = isLoggedIn() && verifySession();
                     </g>
                 </svg>
             </figure>
-            <p class="privacy-status"><strong>Current limitation.</strong> The server still receives your master password when you sign in, and sign-in requests are logged. This privacy design is still being improved.</p>
+            <p class="privacy-status"><strong>Current limitation.</strong> The server still receives your master password when you sign in. The full zero-knowledge design is still being improved.</p>
         </section>
 
         <section class="faq" aria-labelledby="faq-title">

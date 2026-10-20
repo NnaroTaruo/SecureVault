@@ -7,6 +7,9 @@
     RewriteEngine On
     RewriteBase /
 
+    # Keep repository internals private, including files without extensions.
+    RewriteRule (^|/)\.git(/|$) - [F,L,NC]
+
     # Force HTTPS in production (exclude localhost & 127.0.0.1 for local dev)
     RewriteCond %{HTTP_HOST} !^localhost [NC]
     RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
@@ -16,7 +19,7 @@
 </IfModule>
 
 # 2. Block direct access to sensitive files
-<FilesMatch "^(database\.sql|config\.example\.php|AGENTS\.md|\.gitignore|\.env)$">
+<FilesMatch "(?i)^(.*\.sql|config(?:\.example)?\.php|AGENTS\.md|\.htaccess|\.gitignore|\.env(?:\..*)?|debug\.txt|error_log|.*\.log)$">
     Order allow,deny
     Deny from all
 </FilesMatch>

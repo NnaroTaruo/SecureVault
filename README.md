@@ -2,6 +2,8 @@
 
 A personal password manager built with PHP, MySQL, and browser-based encryption. Save your logins, organize them by category, and access previously synced passwords offline.
 
+Built by Ronan Antoque after his mom kept forgetting her passwords.
+
 [Live site](https://securevault.great-site.net/)
 
 ## Features
@@ -20,20 +22,20 @@ Requires **PHP 8+** with `mysqli` and `openssl`, **MySQL/MariaDB**, and **Apache
    ```bash
    git clone https://github.com/NnaroTaruo/SecureVault.git
    ```
-2. Obtain `database.sql` from the maintainer and import it into a new database. The schema is not included in Git.
-3. Copy [config.example.php](config.example.php) to `config.php`, enter your database settings, and add:
-   ```php
-   define('SITE_URL', 'http://localhost/SecureVault/');
-   define('MAINTENANCE_MODE', false);
-   ```
+2. Create an empty database in phpMyAdmin and import [database.example.sql](database.example.sql). It contains tables only; registration creates your categories.
+3. Copy [config.example.php](config.example.php) to `config.php`. Set your database credentials and `SITE_URL` for your installation.
 4. Start Apache and MySQL, then open `http://localhost/SecureVault/`.
 
 For InfinityFree, import the schema into your hosting database and upload the app to the domain’s `htdocs` folder. Update `config.php` with the hosting database settings, your HTTPS `SITE_URL`, and `ENVIRONMENT` set to `'production'`. Keep credentials, SQL dumps, and logs private.
 
 ## Security status
 
-Saved account passwords are encrypted in the browser. Authentication currently sends the master password to PHP and logs authentication request bodies, so the implementation does **not yet meet its intended zero-knowledge design**.
+This is an **experimental project**. Saved account passwords are encrypted in the browser, but authentication still sends the master password to PHP. The implementation does **not yet meet its intended zero-knowledge design**.
 
-Changing the master password currently updates sign-in only; existing entries still require the previous key.
+Master-password changes can leave entries requiring the previous key. Keep the original key until all entries are verified.
 
-Developed by **Ronan Antoque**.
+See [SECURITY.md](SECURITY.md) for limitations and reporting guidance, and [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
+
+## License
+
+[MIT](LICENSE) · Copyright 2026 Ronan Antoque. Third-party assets retain their own licenses.
