@@ -120,7 +120,7 @@ async function setup() {
     if (windows) run(path.join(mysqlBin, 'mysql_install_db.exe'), ['--datadir=' + data, '--port=' + mysqlPort, '--silent']);
     else run(mysqlServer, ['--no-defaults', '--initialize-insecure', '--datadir=' + data]);
     background(mysqlServer, ['--no-defaults', '--basedir=' + path.dirname(mysqlBin), '--datadir=' + data, '--bind-address=127.0.0.1', '--port=' + mysqlPort, '--skip-log-bin', ...(windows ? ['--console'] : ['--mysqlx=0', '--socket=' + path.join(temporary, 'mysql.sock'), '--pid-file=' + path.join(temporary, 'mysql.pid')])]);
-    await until(() => { sql('SELECT 1', false); return true; }, 'Isolated MariaDB did not start');
+    await until(() => { sql('SELECT 1', false); return true; }, 'Isolated MySQL/MariaDB did not start');
     sql('CREATE DATABASE securevault_rotation_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\nUSE securevault_rotation_test;\n' + fs.readFileSync(path.join(root, 'database.example.sql'), 'utf8'), false);
     const ports = [await port(), await port(), await port()];
     origins = ports.map(value => 'http://127.0.0.1:' + value);
@@ -153,7 +153,8 @@ async function serverChecks() {
     for (const accounts of ['', '{}', 'null', '[invalid', '[] trailing']) assert.equal((await request('api/auth.php?action=update_master_password', { old_password: oldPassword, new_password: newPassword, accounts }, context)).status, 400);
     assert.deepEqual((await vault(context)).accounts.map(account => account.password_encrypted), original);
     // A legacy nontransactional sessions table must disable rotation before any data changes.
-    sql('RENAME TABLE sessions TO sessions_before_engine_test; CREATE TABLE sessions LIKE sessions_before_engine_test; ALTER TABLE sessions ENGINE=MyISAM; INSERT INTO sessions SELECT * FROM sessions_before_engine_test');
+    // Tokens are ASCII; keep this test-only index within MySQL's MyISAM byte limit.
+    sql('RENAME TABLE sessions TO sessions_before_engine_test; CREATE TABLE sessions LIKE sessions_before_engine_test; ALTER TABLE sessions MODIFY session_token VARCHAR(255) CHARACTER SET ascii NOT NULL, ENGINE=MyISAM; INSERT INTO sessions SELECT * FROM sessions_before_engine_test');
     assert.equal((await rotate(context, updates)).status, 400);
     sql('DROP TABLE sessions; RENAME TABLE sessions_before_engine_test TO sessions');
     assert.deepEqual((await vault(context)).accounts.map(account => account.password_encrypted), original);
