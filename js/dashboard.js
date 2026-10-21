@@ -16,6 +16,7 @@ function showAlert(message, type = 'info') {
     if (!alertBox) return;
 
     const el = document.createElement('div');
+    el.setAttribute('role', 'alert');
     el.className = `p-3.5 rounded-xl border-l-4 text-xs font-semibold flex items-center gap-2 ${colors[type] || colors.info}`;
     el.style.cssText += 'animation: slideDown .25s ease-out;';
 
@@ -151,64 +152,11 @@ const VaultDB = {
     }
 };
 
-// ── 2. Web Crypto API Key Derivation & Cryptography ─────────
-async function deriveKey(password, saltHex) {
-    const enc = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
-        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]
-    );
-    const saltBytes = enc.encode(saltHex);
-    return window.crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt: saltBytes, iterations: 100000, hash: "SHA-256" },
-        keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
-    );
-}
-
-function bufToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-    return window.btoa(binary);
-}
-
-function base64ToBuf(base64) {
-    const binary = window.atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return bytes.buffer;
-}
-
-async function encryptPasswordLocal(password, key) {
-    const enc = new TextEncoder();
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await window.crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv }, key, enc.encode(password)
-    );
-    const result = new Uint8Array(iv.length + encrypted.byteLength);
-    result.set(iv, 0);
-    result.set(new Uint8Array(encrypted), iv.length);
-    return bufToBase64(result);
-}
-
-async function decryptPasswordLocal(encryptedBase64, key) {
-    try {
-        const data = base64ToBuf(encryptedBase64);
-        const dataArray = new Uint8Array(data);
-        if (dataArray.length < 28) throw new Error("Data too short");
-        const iv = dataArray.slice(0, 12);
-        const ciphertext = dataArray.slice(12);
-        const decrypted = await window.crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: iv }, key, ciphertext
-        );
-        const dec = new TextDecoder();
-        return dec.decode(decrypted);
-    } catch (e) {
-        return null;
-    }
-}
+// ── 2. Browser cryptography is shared with sign-in in vault-crypto.js. ─────────
 
 // ── 3. Vault Synchronization & Offline Mode ─────────────────
 let masterPasswordChangeInProgress = false;
+let accountSaveInProgress = false;
 const VAULT_CACHE_LOCK = 'securevault-vault-cache';
 
 function updateStatusPill(isOnline) {
@@ -633,6 +581,19 @@ async function getEffectiveSalt() {
     return cachedSalt || '';
 }
 
+async function verifyVaultActionKey(password) {
+    if (isVaultLocked || masterPasswordChangeInProgress) return null;
+    try {
+        const salt = await getEffectiveSalt();
+        if (salt === null) return null;
+        const key = await getVerifiedVaultKey(password, salt, typeof KEY_CHECK_CONTEXT === 'undefined' ? '' : KEY_CHECK_CONTEXT);
+        return isVaultLocked || masterPasswordChangeInProgress ? null : key;
+    } catch (error) {
+        showAlert(error.message || 'Could not verify your master key. Sign in online again.', 'error');
+        return null;
+    }
+}
+
 async function executeEditFetch(accountId, masterPassword) {
     let acc = null;
     const salt = await getEffectiveSalt();
@@ -702,6 +663,11 @@ async function executeEditFetch(accountId, masterPassword) {
 
 async function handleAccountSubmit(event) {
     event.preventDefault();
+    if (accountSaveInProgress || isVaultLocked || masterPasswordChangeInProgress) return;
+    if (!navigator.onLine) {
+        showAlert('Cannot save accounts while offline. Please reconnect.', 'warning');
+        return;
+    }
 
     const accountId    = document.getElementById('accountId').value;
     const serviceName  = document.getElementById('serviceName').value.trim();
@@ -716,17 +682,17 @@ async function handleAccountSubmit(event) {
 
     const isEdit   = !!accountId;
     const endpoint = isEdit ? 'api/accounts.php?action=update' : 'api/accounts.php?action=add_account';
-    const salt     = await getEffectiveSalt();
-    if (salt === null) return;
+    const form = document.getElementById('accountForm');
+    const button = form.querySelector('button[type=submit]');
+    accountSaveInProgress = true;
+    button.disabled = true;
+    form.setAttribute('aria-busy', 'true');
 
     try {
-        const key = await deriveKey(masterPass, salt);
+        const key = await verifyVaultActionKey(masterPass);
+        if (!key) return;
         const encryptedPassword = await encryptPasswordLocal(password, key);
-
-        if (!navigator.onLine) {
-            showAlert('Cannot save new accounts while offline. Please reconnect.', 'warning');
-            return;
-        }
+        if (isVaultLocked || masterPasswordChangeInProgress) return;
 
         const body = new URLSearchParams({
             service_name:  serviceName,
@@ -752,6 +718,10 @@ async function handleAccountSubmit(event) {
         }
     } catch (e) {
         showAlert('Encryption or network error', 'error');
+    } finally {
+        accountSaveInProgress = false;
+        button.disabled = false;
+        form.removeAttribute('aria-busy');
     }
 }
 
@@ -768,6 +738,7 @@ function promptMasterKey(action, accountId, btn) {
     const modalMsg = document.getElementById('masterKeyModalMessage');
     const submitBtn = document.getElementById('masterKeySubmitBtn');
     document.getElementById('promptMasterKey').value = '';
+    document.getElementById('promptMasterKey').type = 'password';
 
     if (action === 'reveal') {
         modalMsg.textContent = 'Enter Master Key to decrypt credentials.';
@@ -787,10 +758,24 @@ function promptMasterKey(action, accountId, btn) {
     setTimeout(() => document.getElementById('promptMasterKey').focus(), 120);
 }
 
-function handleMasterKeySubmit(e) {
+async function handleMasterKeySubmit(e) {
     e.preventDefault();
     const masterPassword = document.getElementById('promptMasterKey').value;
     if (!masterPassword) return;
+
+    if (activeMasterKeyAction === 'delete') {
+        const button = document.getElementById('masterKeySubmitBtn');
+        if (button.disabled) return;
+        button.disabled = true;
+        try {
+            if (await executeDeleteAccount(activeMasterKeyAccountId, masterPassword)) closeModal('masterKeyModal');
+            else {
+                document.getElementById('promptMasterKey').value = '';
+                document.getElementById('promptMasterKey').focus();
+            }
+        } finally { button.disabled = false; }
+        return;
+    }
 
     closeModal('masterKeyModal');
 
@@ -798,8 +783,6 @@ function handleMasterKeySubmit(e) {
         executeRevealPassword(activeMasterKeyAccountId, activeMasterKeyButton, masterPassword);
     } else if (activeMasterKeyAction === 'edit') {
         executeEditFetch(activeMasterKeyAccountId, masterPassword);
-    } else if (activeMasterKeyAction === 'delete') {
-        executeDeleteAccount(activeMasterKeyAccountId, masterPassword);
     }
 }
 
@@ -912,10 +895,11 @@ function deleteAccount(accountId) {
 async function executeDeleteAccount(accountId, masterPassword) {
     if (!navigator.onLine) {
         showAlert('Cannot delete accounts in offline mode. Please reconnect.', 'warning');
-        return;
+        return false;
     }
 
     try {
+        if (!await verifyVaultActionKey(masterPassword)) return false;
         const response = await fetch('api/accounts.php?action=delete_account', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN },
@@ -932,12 +916,14 @@ async function executeDeleteAccount(accountId, masterPassword) {
                 card.style.transform = 'scale(0.95)';
                 setTimeout(() => { card.remove(); updateVaultCount(); }, 320);
             }
+            return true;
         } else {
             showAlert(data.message || 'Deletion failed', 'error');
         }
     } catch (e) {
         showAlert('Network error while deleting', 'error');
     }
+    return false;
 }
 
 function updateVaultCount() {
@@ -961,6 +947,11 @@ function openModal(id) {
 function closeModal(id) {
     if (id === 'settingsModal' && masterPasswordChangeInProgress) return;
     if (id === 'settingsModal') document.getElementById('settingsForm').reset();
+    if (id === 'masterKeyModal') document.getElementById('promptMasterKey').value = '';
+    if (id === 'accountModal') {
+        document.getElementById('masterPassword').value = '';
+        document.getElementById('accountPassword').value = '';
+    }
     const el = document.getElementById(id);
     if (el) {
         el.classList.add('hidden');
@@ -969,6 +960,7 @@ function closeModal(id) {
 }
 
 function executeLogout() {
+    clearVaultKeyCheck();
     fetch('api/auth.php?action=logout').then(() => window.location.href = 'index.php');
 }
 
@@ -1082,6 +1074,7 @@ async function handleSettingsSubmit(event) {
                 throw new Error('The server could not confirm the key change.');
             }
             changed = true;
+            clearVaultKeyCheck();
             let offlineRefreshFailed = false;
             try {
                 const accounts = vault.accounts.map((acc, index) => ({ ...acc, password_encrypted: updatedAccounts[index].password_encrypted }));
@@ -1179,6 +1172,7 @@ function initInactivityTracker() {
 function triggerInactivityLock() {
     if (isVaultLocked) return;
     isVaultLocked = true;
+    clearVaultKeyCheck();
 
     // 1. Clear any active inactivity timers
     if (inactivityTimer) clearTimeout(inactivityTimer);

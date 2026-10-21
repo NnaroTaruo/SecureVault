@@ -70,7 +70,7 @@ switch ($action) {
         
         $result = loginUser($username, $password);
         $statusCode = $result['success'] ? 200 : 401;
-        jsonResponse($result['success'], $result['message'], null, $statusCode);
+        jsonResponse($result['success'], $result['message'], $result['key_check'] ?? null, $statusCode);
         break;
     
     case 'logout':
