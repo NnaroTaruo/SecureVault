@@ -74,6 +74,11 @@ switch ($action) {
         break;
     
     case 'logout':
+        if ($method !== 'POST') jsonResponse(false, 'Invalid method', null, 405);
+        if (isLoggedIn() && (!is_string($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)
+            || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_SERVER['HTTP_X_CSRF_TOKEN']))) {
+            jsonResponse(false, 'This sign-in changed. Reload the vault.', null, 403);
+        }
         logoutUser();
         jsonResponse(true, 'Logged out successfully');
         break;

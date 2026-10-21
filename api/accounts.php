@@ -38,6 +38,10 @@ set_exception_handler(function($e) {
     exit;
 });
 
+if (isLoggedIn() && (!is_string($_SERVER['HTTP_X_VAULT_CONTEXT'] ?? null)
+    || empty($_SESSION['key_check_context']) || !hash_equals($_SESSION['key_check_context'], $_SERVER['HTTP_X_VAULT_CONTEXT']))) {
+    jsonResponse(false, 'This sign-in changed. Reload the vault.', null, 403);
+}
 if (!isLoggedIn() || !verifySession()) {
     jsonResponse(false, 'Not authenticated', null, 401);
 }
@@ -92,6 +96,9 @@ switch ($action) {
             'accounts'   => $encryptedAccounts,
             'categories' => $categories,
             'salt'       => $userRow['master_key_salt'],
+            'user_id'    => $userId,
+            'context'    => $_SESSION['key_check_context'],
+            'user'       => getCurrentUser(),
             'username'   => $_SESSION['username'] ?? 'User',
             'synced_at'  => date('c')
         ]);

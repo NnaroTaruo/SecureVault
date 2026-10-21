@@ -1,31 +1,21 @@
 <?php
-/**
- * SecureVault Dashboard - PWA Edition
- */
-
+/** SecureVault dashboard: personal data is loaded only by the account-bound client. */
 require_once 'config.php';
-require_once 'auth.php';
-require_once 'accounts.php';
-
 if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
     require_once __DIR__ . '/maintenance.php';
     exit;
 }
-
-requireLogin();
-
-if (empty($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-
-$user = getCurrentUser();
-$userId = getCurrentUserId();
-$categories = getUserCategories($userId);
-$stats = getVaultStats($userId);
-
-$categoryId = isset($_GET['category']) && $_GET['category'] !== 'all' ? (int)$_GET['category'] : 0;
-$accounts = $categoryId ? getAccountsByCategory($userId, $categoryId) : getUserAccounts($userId);
-
-// Icon color map by first letter
-$iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B59B6','#E91E63','#FF5722','#00BCD4'];
+$offlineShell = isset($_GET['offline_shell']) && $_GET['offline_shell'] === '1';
+if ($offlineShell) {
+    header('X-SecureVault-Offline-Shell: 1');
+    header('Cache-Control: public, max-age=0');
+} else {
+    require_once 'auth.php';
+    requireLogin();
+    header('Cache-Control: no-store');
+}
+// Never put account names, usernames, emails, or vault entries in this HTML.
+$userId = $offlineShell ? null : getCurrentUserId();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -147,7 +137,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             <div class="flex items-center gap-2 mt-0.5">
                 <p id="assetsCountBadge" class="text-xs text-primary font-semibold flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block"></span>
-                    <span id="activeCountText"><?php echo count($accounts); ?> SECURE ASSET<?php echo count($accounts) !== 1 ? 's' : ''; ?> ACTIVE</span>
+                    <span id="activeCountText">0 SECURE ASSETS ACTIVE</span>
                 </p>
                 <span id="offlineStatusPill" class="hidden text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-yellow-900/40 border border-yellow-600/50 text-yellow-400">
                     🟡 Offline Mode
@@ -164,7 +154,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
             </button>
             <div class="w-9 h-9 rounded-full bg-primary/20 border border-primary/40
                         flex items-center justify-center text-primary font-bold text-sm">
-                <?php echo strtoupper(substr($user['username'], 0, 1)); ?>
+                <span data-vault-profile="initial">V</span>
             </div>
         </div>
     </div>
@@ -175,19 +165,11 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 
 <!-- ===== CATEGORY CHIPS (horizontal scroll) ===== -->
 <div class="fixed top-[68px] left-0 right-0 z-10 bg-dark-bg overflow-x-auto hide-scrollbar md:ml-64">
-    <div class="flex gap-2 px-4 py-2 max-w-2xl">
+    <div id="categoryChips" class="flex gap-2 px-4 py-2 max-w-2xl">
         <a href="dashboard.php"
-           class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all
-                  <?php echo !$categoryId ? 'bg-primary text-dark-bg' : 'bg-dark-card border border-dark-border text-gray-400 hover:border-primary/40'; ?>">
+           class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all bg-primary text-dark-bg">
             All
         </a>
-        <?php foreach ($categories as $cat): ?>
-        <a href="?category=<?php echo $cat['id']; ?>"
-           class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all
-                  <?php echo $categoryId === $cat['id'] ? 'bg-primary text-dark-bg' : 'bg-dark-card border border-dark-border text-gray-400 hover:border-primary/40'; ?>">
-            <?php echo getCategoryEmoji($cat['name']); ?> <?php echo htmlspecialchars($cat['name']); ?>
-        </a>
-        <?php endforeach; ?>
     </div>
 </div>
 
@@ -231,7 +213,6 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 <!-- ===== MAIN CONTENT ===== -->
 <main class="pt-[130px] pb-32 px-4 max-w-2xl mx-auto md:ml-64" id="mainContent">
 
-    <?php if (empty($accounts)): ?>
     <!-- Empty State -->
     <div class="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div class="w-24 h-24 rounded-3xl bg-dark-card border border-dark-border
@@ -246,120 +227,6 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
         </button>
     </div>
 
-    <?php else: ?>
-    <!-- Accounts Grid: 1-col mobile, 2-col desktop -->
-    <div id="accountsList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-
-        <?php foreach ($accounts as $index => $account):
-            $letter     = strtoupper(substr($account['service_name'], 0, 1));
-            $iconColor  = $iconColors[ord($letter) % count($iconColors)];
-        ?>
-        <div class="bg-dark-card border border-dark-border rounded-2xl p-4 card-anim
-                    hover:border-primary/30 transition-all"
-             style="animation-delay: <?php echo min($index * 0.05, 0.4); ?>s;"
-             data-account-id="<?php echo $account['id']; ?>"
-             data-service="<?php echo strtolower(htmlspecialchars($account['service_name'])); ?>">
-
-            <!-- Top Row: Icon + Name + Actions -->
-            <div class="flex items-center gap-3 mb-3">
-                <!-- Service Icon -->
-                <div class="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0"
-                     style="background:<?php echo $iconColor; ?>18; border:1.5px solid <?php echo $iconColor; ?>44;">
-                    <span style="color:<?php echo $iconColor; ?>;"><?php echo $letter; ?></span>
-                </div>
-
-                <!-- Name + Username -->
-                <div class="flex-1 min-w-0">
-                    <h3 class="font-bold text-sm truncate">
-                        <?php echo htmlspecialchars($account['service_name']); ?>
-                    </h3>
-                    <div class="cursor-pointer group flex items-center gap-1 mt-0.5 w-max max-w-full"
-                         onclick="copyUserClipboard('<?php echo htmlspecialchars(addslashes($account['username']), ENT_QUOTES); ?>')"
-                         title="Tap to copy username">
-                        <span class="text-xs text-gray-400 group-hover:text-white transition-colors truncate account-username">
-                            <?php echo htmlspecialchars($account['username']); ?>
-                        </span>
-                        <span class="text-xs opacity-50 group-hover:opacity-100 transition-opacity">📋</span>
-                    </div>
-                </div>
-
-                <!-- Edit / Delete -->
-                <div class="flex gap-0.5 flex-shrink-0">
-                    <button onclick="editAccount(<?php echo $account['id']; ?>)"
-                            class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500
-                                   hover:bg-white/5 hover:text-white transition-all text-sm">✏️</button>
-                    <button onclick="deleteAccount(<?php echo $account['id']; ?>)"
-                            class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500
-                                   hover:bg-red-900/20 hover:text-red-400 transition-all text-sm">🗑️</button>
-                </div>
-            </div>
-
-            <!-- Password Row -->
-            <div class="flex items-center gap-2 mb-3 px-3 py-2.5
-                        bg-dark-bg/70 rounded-xl border border-dark-border/60">
-                <span class="flex-1 pw-dots text-gray-500 tracking-widest
-                             password-masked password-display-<?php echo $account['id']; ?>">
-                    ••••••••••••
-                </span>
-                <button onclick="togglePasswordVisibility(this)"
-                        class="text-gray-500 hover:text-primary transition-colors flex-shrink-0 p-0.5">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
-                                 -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                    </svg>
-                </button>
-            </div>
-
-            <!-- Action Buttons Row -->
-            <div class="flex gap-2">
-                <button onclick="copyUserClipboard('<?php echo htmlspecialchars(addslashes($account['username']), ENT_QUOTES); ?>')"
-                        class="tap-active flex-1 flex items-center justify-center gap-1.5 py-2.5
-                               rounded-xl bg-dark-bg/70 border border-dark-border/60
-                               text-gray-300 hover:border-primary/40 hover:text-white
-                               text-xs font-semibold transition-all">
-                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2
-                                 m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                    </svg>
-                    Copy User
-                </button>
-
-                <button onclick="triggerReveal(<?php echo $account['id']; ?>, this)"
-                        class="tap-active flex-1 flex items-center justify-center gap-1.5 py-2.5
-                               rounded-xl bg-primary/10 border border-primary/30
-                               text-primary hover:bg-primary/20
-                               text-xs font-bold transition-all">
-                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1
-                                 v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-                    </svg>
-                    Pass
-                </button>
-            </div>
-
-            <?php if (!empty($account['website_url'])): ?>
-            <div class="mt-2.5 pt-2.5 border-t border-dark-border/40">
-                <?php
-                    $url = trim($account['website_url']);
-                    if (!preg_match('~^https?://~i', $url)) $url = 'https://' . ltrim($url, '/');
-                    $safUrl = (stripos($url, 'javascript:') === 0 || stripos($url, 'data:') === 0) ? '#' : htmlspecialchars($url);
-                ?>
-                <a href="<?php echo $safUrl; ?>" target="_blank" rel="noopener"
-                   class="text-xs text-primary hover:underline truncate block">
-                    🔗 <?php echo htmlspecialchars($account['website_url']); ?>
-                </a>
-            </div>
-            <?php endif; ?>
-        </div>
-        <?php endforeach; ?>
-
-    </div>
-    <?php endif; ?>
 </main>
 
 <!-- ===== FLOATING ACTION BUTTON ===== -->
@@ -436,36 +303,19 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     </div>
 
     <!-- Nav -->
-    <nav class="flex-1 space-y-0.5 overflow-y-auto hide-scrollbar">
+    <nav id="sidebarCategories" class="flex-1 space-y-0.5 overflow-y-auto hide-scrollbar">
         <a href="dashboard.php"
-           class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                  <?php echo !$categoryId ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:text-white hover:bg-dark-border/50'; ?>">
+           class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all bg-primary/10 text-primary">
             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
             </svg>
             All Vaults
             <span class="ml-auto text-xs bg-dark-border/80 px-2 py-0.5 rounded-full text-gray-500">
-                <?php echo count($accounts); ?>
+                0
             </span>
         </a>
 
-        <?php foreach ($categories as $cat):
-            $count = 0;
-            foreach ($stats['by_category'] as $s) {
-                if ($s['name'] === $cat['name']) { $count = $s['count']; break; }
-            }
-        ?>
-        <a href="?category=<?php echo $cat['id']; ?>"
-           class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-                  <?php echo $categoryId === $cat['id'] ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:text-white hover:bg-dark-border/50'; ?>">
-            <span class="flex-shrink-0"><?php echo getCategoryEmoji($cat['name']); ?></span>
-            <?php echo htmlspecialchars($cat['name']); ?>
-            <span class="ml-auto text-xs bg-dark-border/80 px-2 py-0.5 rounded-full text-gray-500">
-                <?php echo $count; ?>
-            </span>
-        </a>
-        <?php endforeach; ?>
     </nav>
 
     <!-- User section -->
@@ -473,11 +323,11 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
         <div class="flex items-center gap-3 px-3 py-2 mb-1">
             <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/30
                         flex items-center justify-center text-primary font-bold text-xs">
-                <?php echo strtoupper(substr($user['username'], 0, 1)); ?>
+                <span data-vault-profile="initial">V</span>
             </div>
             <div class="min-w-0">
-                <div class="text-sm font-semibold truncate"><?php echo htmlspecialchars($user['username']); ?></div>
-                <div class="text-xs text-gray-500 truncate"><?php echo htmlspecialchars($user['email']); ?></div>
+                <div class="text-sm font-semibold truncate"><span data-vault-profile="username">Vault</span></div>
+                <div class="text-xs text-gray-500 truncate"><span data-vault-profile="email"></span></div>
             </div>
         </div>
         <button onclick="openSettingsModal()"
@@ -540,11 +390,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
                 <label for="category" class="block text-xs font-bold text-primary uppercase tracking-wider mb-2">Category *</label>
                 <select id="category" class="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl
                                              text-white text-sm focus:outline-none focus:border-primary transition-all">
-                    <?php foreach ($categories as $cat): ?>
-                    <option value="<?php echo $cat['id']; ?>" class="bg-dark-card">
-                        <?php echo htmlspecialchars($cat['name']); ?>
-                    </option>
-                    <?php endforeach; ?>
+                    <option value="">Select Category</option>
                 </select>
             </div>
             <div>
@@ -696,11 +542,11 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
         <div class="p-5 border-b border-dark-border flex items-center gap-4">
             <div class="w-12 h-12 rounded-full bg-primary/20 border border-primary/30
                         flex items-center justify-center text-primary font-bold text-lg">
-                <?php echo strtoupper(substr($user['username'], 0, 1)); ?>
+                <span data-vault-profile="initial">V</span>
             </div>
             <div>
-                <div class="font-bold"><?php echo htmlspecialchars($user['username']); ?></div>
-                <div class="text-xs text-gray-400"><?php echo htmlspecialchars($user['email']); ?></div>
+                <div class="font-bold"><span data-vault-profile="username">Vault</span></div>
+                <div class="text-xs text-gray-400"><span data-vault-profile="email"></span></div>
             </div>
         </div>
         <form id="settingsForm" onsubmit="handleSettingsSubmit(event)" class="p-5 space-y-4">
@@ -955,9 +801,11 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 </div>
 
 <script>
-    const USER_SALT = "<?php echo isset($_SESSION['master_key_salt']) ? addslashes($_SESSION['master_key_salt']) : ''; ?>";
-    const CSRF_TOKEN = <?php echo json_encode($_SESSION['csrf_token']); ?>;
-    const KEY_CHECK_CONTEXT = <?php echo json_encode($_SESSION['key_check_context'] ?? ''); ?>;
+    const USER_ID = <?php echo json_encode($userId); ?>;
+    const OFFLINE_SHELL = <?php echo json_encode($offlineShell); ?>;
+    const USER_SALT = <?php echo json_encode($offlineShell ? '' : ($_SESSION['master_key_salt'] ?? '')); ?>;
+    const CSRF_TOKEN = <?php echo json_encode($offlineShell ? '' : ($_SESSION['csrf_token'] ?? '')); ?>;
+    const KEY_CHECK_CONTEXT = <?php echo json_encode($offlineShell ? '' : ($_SESSION['key_check_context'] ?? '')); ?>;
 </script>
 <!-- About App Modal -->
 <div id="aboutModal"
@@ -1001,8 +849,9 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     </div>
 </div>
 
+<script src="js/vault-storage.js?v=1"></script>
 <script src="js/vault-crypto.js?v=1"></script>
-<script src="js/dashboard.js?v=11"></script>
+<script src="js/dashboard.js?v=12"></script>
 <script src="js/pwa.js"></script>
 
 <!-- PWA Install Banner (Premium) -->

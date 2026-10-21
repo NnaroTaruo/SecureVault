@@ -56,12 +56,13 @@ async function decryptPasswordLocal(encryptedBase64, key) {
 
 const VAULT_KEY_CHECK_STORAGE = 'securevault-key-check';
 
-async function rememberVaultKey(password, salt, context) {
+async function rememberVaultKey(password, salt, context, isCurrent = () => true) {
     if (!salt || typeof context !== 'string' || !/^[a-f0-9]{32}$/.test(context)) {
         throw new Error('Reload the sign-in page and try again.');
     }
     const key = await deriveKey(password, salt);
     const encrypted = await encryptPasswordLocal('SecureVault key check:' + context, key);
+    if (!isCurrent()) throw new Error('Your sign-in changed');
     // Only ciphertext and public metadata persist, never the password or derived key.
     localStorage.setItem(VAULT_KEY_CHECK_STORAGE, JSON.stringify({ context, salt, encrypted }));
 }
