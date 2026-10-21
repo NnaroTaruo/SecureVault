@@ -1,5 +1,5 @@
 // Run: node tests/master-password-change.cjs
-// Uses isolated sample data; requires XAMPP and Chrome, or the SV_TEST_* paths below.
+// Uses isolated sample data; defaults to XAMPP on Windows or MySQL and Chrome on Ubuntu.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -8,9 +8,11 @@ const net = require('node:net');
 const { spawn, spawnSync } = require('node:child_process');
 const { webcrypto } = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const php = process.env.SV_TEST_PHP || 'C:/xampp/php/php.exe';
-const mysqlBin = process.env.SV_TEST_MYSQL_BIN || 'C:/xampp/mysql/bin';
-const chrome = process.env.SV_TEST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const windows = process.platform === 'win32';
+const php = process.env.SV_TEST_PHP || (windows ? 'C:/xampp/php/php.exe' : '/usr/bin/php');
+const mysqlBin = process.env.SV_TEST_MYSQL_BIN || (windows ? 'C:/xampp/mysql/bin' : '/usr/bin');
+const mysqlServer = process.env.SV_TEST_MYSQLD || (windows ? path.join(mysqlBin, 'mysqld.exe') : '/usr/sbin/mysqld');
+const chrome = process.env.SV_TEST_CHROME || (windows ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : '/usr/bin/google-chrome');
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'securevault-rotation-test-'));
 const app = path.join(temporary, 'app');
 const children = [];
@@ -47,7 +49,7 @@ async function until(check, message, attempts = 100) {
     throw new Error(message);
 }
 function sql(statement, database = true) {
-    return run(path.join(mysqlBin, 'mysql.exe'), ['--no-defaults', '--host=127.0.0.1', '--port=' + mysqlPort, '--user=root', '--batch', '--skip-column-names', ...(database ? ['--database=securevault_rotation_test'] : [])], { input: statement });
+    return run(path.join(mysqlBin, windows ? 'mysql.exe' : 'mysql'), ['--no-defaults', '--host=127.0.0.1', '--port=' + mysqlPort, '--user=root', '--batch', '--skip-column-names', ...(database ? ['--database=securevault_rotation_test'] : [])], { input: statement });
 }
 async function request(endpoint, body, context = {}, server = 0, csrf = context.csrf) {
     const response = await fetch(origins[server] + '/' + endpoint, {
@@ -105,7 +107,7 @@ async function createUser(username, count = 2) {
 const rotate = (context, accounts, previous = oldPassword, next = newPassword) => request('api/auth.php?action=update_master_password', { old_password: previous, new_password: next, accounts: JSON.stringify(accounts) }, context);
 
 async function setup() {
-    for (const executable of [php, chrome, path.join(mysqlBin, 'mysqld.exe'), path.join(mysqlBin, 'mysql_install_db.exe')]) assert(fs.existsSync(executable), 'Missing test executable: ' + executable);
+    for (const executable of [php, chrome, mysqlServer, path.join(mysqlBin, windows ? 'mysql.exe' : 'mysql'), ...(windows ? [path.join(mysqlBin, 'mysql_install_db.exe')] : [])]) assert(fs.existsSync(executable), 'Missing test executable: ' + executable);
     fs.mkdirSync(app);
     const files = run('git', ['ls-files', '-z'], { cwd: root }).split('\0').filter(Boolean);
     assert(!files.includes('config.php') && !files.includes('database.sql'), 'Private files must not be tracked or copied');
@@ -115,9 +117,10 @@ async function setup() {
     }
     mysqlPort = await port();
     const data = path.join(temporary, 'mysql-data');
-    run(path.join(mysqlBin, 'mysql_install_db.exe'), ['--datadir=' + data, '--port=' + mysqlPort, '--silent']);
-    background(path.join(mysqlBin, 'mysqld.exe'), ['--no-defaults', '--basedir=' + path.dirname(mysqlBin), '--datadir=' + data, '--bind-address=127.0.0.1', '--port=' + mysqlPort, '--skip-log-bin', '--console']);
-    await until(() => { sql('SELECT 1', false); return true; }, 'Isolated MariaDB did not start');
+    if (windows) run(path.join(mysqlBin, 'mysql_install_db.exe'), ['--datadir=' + data, '--port=' + mysqlPort, '--silent']);
+    else run(mysqlServer, ['--no-defaults', '--initialize-insecure', '--datadir=' + data]);
+    background(mysqlServer, ['--no-defaults', '--basedir=' + path.dirname(mysqlBin), '--datadir=' + data, '--bind-address=127.0.0.1', '--port=' + mysqlPort, '--skip-log-bin', ...(windows ? ['--console'] : ['--mysqlx=0', '--socket=' + path.join(temporary, 'mysql.sock'), '--pid-file=' + path.join(temporary, 'mysql.pid')])]);
+    await until(() => { sql('SELECT 1', false); return true; }, 'Isolated MySQL/MariaDB did not start');
     sql('CREATE DATABASE securevault_rotation_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\nUSE securevault_rotation_test;\n' + fs.readFileSync(path.join(root, 'database.example.sql'), 'utf8'), false);
     const ports = [await port(), await port(), await port()];
     origins = ports.map(value => 'http://127.0.0.1:' + value);
@@ -150,7 +153,8 @@ async function serverChecks() {
     for (const accounts of ['', '{}', 'null', '[invalid', '[] trailing']) assert.equal((await request('api/auth.php?action=update_master_password', { old_password: oldPassword, new_password: newPassword, accounts }, context)).status, 400);
     assert.deepEqual((await vault(context)).accounts.map(account => account.password_encrypted), original);
     // A legacy nontransactional sessions table must disable rotation before any data changes.
-    sql('RENAME TABLE sessions TO sessions_before_engine_test; CREATE TABLE sessions LIKE sessions_before_engine_test; ALTER TABLE sessions ENGINE=MyISAM; INSERT INTO sessions SELECT * FROM sessions_before_engine_test');
+    // Tokens are ASCII; keep this test-only index within MySQL's MyISAM byte limit.
+    sql('RENAME TABLE sessions TO sessions_before_engine_test; CREATE TABLE sessions LIKE sessions_before_engine_test; ALTER TABLE sessions MODIFY session_token VARCHAR(255) CHARACTER SET ascii NOT NULL, ENGINE=MyISAM; INSERT INTO sessions SELECT * FROM sessions_before_engine_test');
     assert.equal((await rotate(context, updates)).status, 400);
     sql('DROP TABLE sessions; RENAME TABLE sessions_before_engine_test TO sessions');
     assert.deepEqual((await vault(context)).accounts.map(account => account.password_encrypted), original);
@@ -224,7 +228,7 @@ async function browserPage(debugPort) {
 async function browserChecks() {
     const context = await createUser('browser-check');
     const debugPort = await port();
-    background(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=' + debugPort, '--user-data-dir=' + path.join(temporary, 'chrome'), 'about:blank']);
+    background(chrome, ['--headless=new', '--disable-gpu', ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []), '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=' + debugPort, '--user-data-dir=' + path.join(temporary, 'chrome'), 'about:blank']);
     await until(async () => (await fetch('http://127.0.0.1:' + debugPort + '/json/version')).ok, 'Isolated Chrome did not start');
     const page = await browserPage(debugPort);
     const signInBrowser = async password => {
