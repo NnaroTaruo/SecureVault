@@ -19,7 +19,7 @@ A compact vault door built around the letter **S**. [Download the editable SVG](
 
 - Account passwords encrypted with AES-256-GCM and PBKDF2 through WebCrypto.
 - Search, categories, and a built-in password generator.
-- Installable web app with offline viewing in the same browser; changes require a connection.
+- Installable web app with offline viewing for the current account; signing out removes this browser's vault copy. Changes require a connection.
 - Revealed passwords hide after 30 seconds, with a vault lock after 5 minutes of inactivity.
 - Responsive landing page with motion graphics, scroll animations, and reduced-motion support.
 

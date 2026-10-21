@@ -57,14 +57,16 @@ SecureVault/
 ├── config.php                # Environment config (DB credentials, SITE_URL, MAINTENANCE_MODE) [GIT IGNORED]
 ├── config.example.php        # Blueprint for local/production configuration
 ├── database.sql              # Database schema & default categories [GIT IGNORED]
-├── service-worker.js         # PWA Service Worker (Cache v9: offline shell & API fallback)
+├── service-worker.js         # PWA Service Worker (scoped cache v14: neutral offline shell)
 ├── manifest.json             # PWA Web App Manifest
 ├── api/
 │   ├── accounts.php          # REST/AJAX endpoints (sync_vault, get_account, reveal, add, update, delete)
 │   └── auth.php              # Auth endpoints (login, register, update_master_password, logout)
 ├── css/style.css             # Custom utility animations and scrollbar rules
 └── js/
-    ├── dashboard.js          # Core WebCrypto engine, IndexedDB (VaultDB), CRUD AJAX, UI logic
+    ├── dashboard.js          # Account-bound sync, CRUD AJAX, UI logic
+    ├── vault-storage.js      # Account/sign-in-bound IndexedDB, device reset and logout
+    ├── vault-crypto.js       # Shared WebCrypto and local master-key checks
     └── pwa.js                # Service Worker registration & PWA installation prompts
 ```
 
@@ -76,13 +78,18 @@ SecureVault allows users to open their vault and decrypt passwords with **0 netw
 
 1. **Sync Cycle (When Online)**:
    * Upon opening `dashboard.php`, `syncVaultFromNetwork()` fetches `api/accounts.php?action=sync_vault`.
-   * The encrypted payload (all `password_encrypted` ciphertexts, `master_key_salt`, categories) is saved to the browser's native IndexedDB (`SecureVaultDB` $\rightarrow$ `vault_items` and `vault_meta`).
+   * The encrypted payload, salt, and unencrypted metadata are saved to IndexedDB (`SecureVaultDB-v2:<app-path>` → `vault_items` and `vault_meta`), bound to the account ID and random sign-in context. Account requests carry `X-Vault-Context` so stale tabs cannot fetch a newly signed-in account's data.
 2. **Offline Fallback (When Disconnected / Airplane Mode)**:
-   * `service-worker.js` (Cache `v9`) intercepts page navigation and serves the cached `dashboard.php` app shell.
+   * `service-worker.js` (scoped cache `v14`) serves only `dashboard.php?offline_shell=1`, a deliberately neutral shell without personal fields or session tokens. Authenticated pages and API responses are never cached.
    * `js/dashboard.js` detects offline state and displays the `🟡 Offline Mode` header pill.
-   * If the HTML account list is empty, `renderOfflineVaultCards()` reads the encrypted items directly from `VaultDB`.
+   * Both online and offline cards are rendered from the account-bound snapshot. All IndexedDB reads and writes check the current owner; delayed requests from old tabs cannot replace the new copy.
 3. **Offline Decryption**:
    * When clicking "Pass" (Reveal) or "Edit" offline, `executeRevealPassword()` retrieves the ciphertext from IndexedDB, retrieves the salt from `vault_meta`, prompts for the Master Key, and executes `decryptPasswordLocal()` in-memory.
+
+4. **Account Switching & Sign-out**:
+   * A new online sign-in replaces the device copy and closes stale tabs using storage events and BroadcastChannel. Web Locks serialize cache replacement, key changes, and cleanup.
+   * Explicit sign-out revokes device access before awaiting network/storage work, then clears items, metadata, and the key check. A path-scoped sign-out cookie blocks the old HTTP session on reconnect. Inactivity locking retains the encrypted offline copy.
+   * The first sign-in after this update removes the legacy unowned database/cache. Close older release tabs and sign in online once; no server ciphertext or crypto-parameter migration is required. See `SECURITY.md` for actual guarantees and remaining limitations.
 
 ---
 

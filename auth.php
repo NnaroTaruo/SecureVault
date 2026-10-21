@@ -157,9 +157,10 @@ function loginUser($username, $password) {
         $_SESSION['master_key_salt'] = $user['master_key_salt'];
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         $_SESSION['key_check_context'] = bin2hex(random_bytes(16));
+        setcookie('sv_signed_out', '', ['expires' => 1, 'path' => parse_url(SITE_URL, PHP_URL_PATH) ?: '/', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'samesite' => 'Strict']);
         
         return ['success' => true, 'message' => 'Login successful', 'key_check' => [
-            'salt' => $user['master_key_salt'], 'context' => $_SESSION['key_check_context']
+            'salt' => $user['master_key_salt'], 'context' => $_SESSION['key_check_context'], 'user_id' => (int)$user['id']
         ]];
     } else {
         $db->rollback();
@@ -189,6 +190,11 @@ function logoutUser() {
  */
 function verifySession() {
     if (!isLoggedIn()) {
+        return false;
+    }
+    // An offline explicit sign-out must also block the old HTTP session on reconnect.
+    if (($_COOKIE['sv_signed_out'] ?? '') === '1') {
+        logoutUser();
         return false;
     }
     

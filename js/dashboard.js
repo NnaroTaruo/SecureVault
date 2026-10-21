@@ -35,129 +35,77 @@ function showAlert(message, type = 'info') {
     setTimeout(() => el.remove(), 4500);
 }
 
-// ── 1. IndexedDB Engine for Encrypted Vault (Zero-Knowledge) ─
-const VaultDB = {
-    DB_NAME: 'SecureVaultDB',
-    DB_VERSION: 1,
-    db: null,
-
-    async open() {
-        if (this.db) return this.db;
-        return new Promise((resolve, reject) => {
-            if (!('indexedDB' in window)) {
-                console.warn('IndexedDB not supported');
-                return resolve(null);
-            }
-            const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains('vault_items')) {
-                    db.createObjectStore('vault_items', { keyPath: 'id' });
-                }
-                if (!db.objectStoreNames.contains('vault_meta')) {
-                    db.createObjectStore('vault_meta', { keyPath: 'key' });
-                }
-            };
-            request.onsuccess = (e) => {
-                this.db = e.target.result;
-                resolve(this.db);
-            };
-            request.onerror = (e) => reject(e.target.error);
-        });
-    },
-
-    async saveAll(accounts, meta = {}) {
-        const db = await this.open();
-        if (!db) return false;
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(['vault_items', 'vault_meta'], 'readwrite');
-            const itemsStore = tx.objectStore('vault_items');
-            const metaStore = tx.objectStore('vault_meta');
-
-            itemsStore.clear();
-            accounts.forEach(acc => {
-                // Ensure id is numeric
-                const item = { ...acc, id: Number(acc.id) };
-                itemsStore.put(item);
-            });
-
-            for (const [k, v] of Object.entries(meta)) {
-                metaStore.put({ key: k, value: v });
-            }
-
-            tx.oncomplete = () => resolve(true);
-            tx.onerror = (e) => reject(e.target.error);
-            tx.onabort = () => reject(tx.error || new Error('Offline storage update was interrupted'));
-        });
-    },
-
-    async getAll() {
-        const db = await this.open();
-        if (!db) return [];
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('vault_items', 'readonly');
-            const store = tx.objectStore('vault_items');
-            const req = store.getAll();
-            req.onsuccess = () => resolve(req.result || []);
-            req.onerror = (e) => reject(e.target.error);
-        });
-    },
-
-    async getItem(id) {
-        const db = await this.open();
-        if (!db) return null;
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('vault_items', 'readonly');
-            const store = tx.objectStore('vault_items');
-            const req = store.get(Number(id));
-            req.onsuccess = () => resolve(req.result || null);
-            req.onerror = (e) => reject(e.target.error);
-        });
-    },
-
-    async putItem(item) {
-        const db = await this.open();
-        if (!db) return false;
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('vault_items', 'readwrite');
-            const store = tx.objectStore('vault_items');
-            const req = store.put({ ...item, id: Number(item.id) });
-            req.onsuccess = () => resolve(true);
-            req.onerror = (e) => reject(e.target.error);
-        });
-    },
-
-    async deleteItem(id) {
-        const db = await this.open();
-        if (!db) return false;
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('vault_items', 'readwrite');
-            const store = tx.objectStore('vault_items');
-            const req = store.delete(Number(id));
-            req.onsuccess = () => resolve(true);
-            req.onerror = (e) => reject(e.target.error);
-        });
-    },
-
-    async getMeta(key) {
-        const db = await this.open();
-        if (!db) return null;
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('vault_meta', 'readonly');
-            const store = tx.objectStore('vault_meta');
-            const req = store.get(key);
-            req.onsuccess = () => resolve(req.result ? req.result.value : null);
-            req.onerror = (e) => reject(e.target.error);
-        });
-    }
-};
-
 // ── 2. Browser cryptography is shared with sign-in in vault-crypto.js. ─────────
 
 // ── 3. Vault Synchronization & Offline Mode ─────────────────
 let masterPasswordChangeInProgress = false;
 let accountSaveInProgress = false;
-const VAULT_CACHE_LOCK = 'securevault-vault-cache';
+const VAULT_OWNER = Object.freeze(USER_ID ? { userId: USER_ID, context: KEY_CHECK_CONTEXT } : VaultDevice.active());
+VaultDB.owner = VAULT_OWNER;
+const EMPTY_VAULT_HTML = document.getElementById('mainContent').innerHTML;
+
+function vaultHeaders(extra = {}) { return { ...extra, 'X-Vault-Context': VAULT_OWNER?.context || '' }; }
+
+function discardVaultView(message = 'This sign-in ended or changed. Sign in online to open your vault.') {
+    isVaultLocked = true;
+    Object.keys(revealTimers).forEach(id => { clearTimeout(revealTimers[id]); delete revealTimers[id]; });
+    document.querySelectorAll('form').forEach(form => form.reset());
+    document.getElementById('category').replaceChildren(new Option('Select Category', ''));
+    currentGeneratedPassword = '';
+    activeMasterKeyAction = activeMasterKeyAccountId = activeMasterKeyButton = null;
+    document.querySelectorAll('[data-vault-profile]').forEach(el => { el.textContent = ''; });
+    document.getElementById('categoryChips').replaceChildren();
+    document.getElementById('sidebarCategories').replaceChildren();
+    const main = document.getElementById('mainContent');
+    main.replaceChildren();
+    const text = document.createElement('p');
+    text.className = 'text-sm text-gray-300 py-6';
+    text.textContent = message;
+    const link = document.createElement('a');
+    link.href = 'login.php'; link.textContent = 'Sign in'; link.className = 'text-primary underline';
+    main.append(text, link);
+    document.getElementById('activeCountText').textContent = 'VAULT CLOSED';
+    document.querySelectorAll('[id$="Modal"], #searchOverlay').forEach(el => el.classList.add('hidden'));
+    document.getElementById('vaultLockOverlay').classList.add('hidden');
+    document.body.classList.remove('vault-blurred');
+    document.body.style.overflow = 'auto';
+}
+
+function renderVaultSnapshot(accounts, categories, user = {}) {
+    if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
+    const selected = Number(new URLSearchParams(location.search).get('category')) || 0;
+    const visible = selected ? accounts.filter(account => Number(account.category_id) === selected) : accounts;
+    if (visible.length) renderOfflineVaultCards(visible);
+    else document.getElementById('mainContent').innerHTML = EMPTY_VAULT_HTML;
+    document.getElementById('activeCountText').textContent = `${accounts.length} SECURE ASSET${accounts.length !== 1 ? 's' : ''}`;
+    document.querySelectorAll('[data-vault-profile]').forEach(el => {
+        const field = el.dataset.vaultProfile;
+        el.textContent = field === 'initial' ? (user.username || 'V').charAt(0).toUpperCase() : (user[field] || (field === 'username' ? 'Vault' : ''));
+    });
+    const select = document.getElementById('category');
+    const previous = select.value;
+    select.replaceChildren(new Option('Select Category', ''));
+    for (const category of categories) select.add(new Option(category.name, category.id));
+    select.value = previous;
+    for (const id of ['categoryChips', 'sidebarCategories']) {
+        const container = document.getElementById(id);
+        container.replaceChildren();
+        for (const category of [{ id: 0, name: 'All Vaults' }, ...categories]) {
+            const link = document.createElement('a');
+            link.href = 'dashboard.php' + (category.id ? '?category=' + category.id : '');
+            link.textContent = (category.icon ? category.icon + ' ' : '') + (id === 'categoryChips' && !category.id ? 'All' : category.name);
+            link.className = (id === 'categoryChips' ? 'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ' : 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ') +
+                (Number(category.id) === selected ? (id === 'categoryChips' ? 'bg-primary text-dark-bg' : 'bg-primary/10 text-primary') : 'bg-dark-card text-gray-400 hover:text-white');
+            if (id === 'sidebarCategories') {
+                const count = document.createElement('span');
+                count.className = 'ml-auto text-xs bg-dark-border/80 px-2 py-0.5 rounded-full text-gray-500';
+                count.textContent = String(category.id ? accounts.filter(account => Number(account.category_id) === Number(category.id)).length : accounts.length);
+                link.appendChild(count);
+            }
+            container.appendChild(link);
+        }
+    }
+}
 
 function updateStatusPill(isOnline) {
     const pill = document.getElementById('offlineStatusPill');
@@ -167,32 +115,36 @@ function updateStatusPill(isOnline) {
 }
 
 async function syncVaultFromNetwork() {
-    if (masterPasswordChangeInProgress) return false;
+    if (masterPasswordChangeInProgress || isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return false;
     const synchronize = async () => {
-        if (masterPasswordChangeInProgress) return false;
+        if (masterPasswordChangeInProgress || isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return false;
         if (!navigator.onLine) {
             updateStatusPill(false);
-            checkRenderOfflineVault();
+            await checkRenderOfflineVault();
             return false;
         }
         try {
             const response = await fetch('api/accounts.php?action=sync_vault', {
-                method: 'GET', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' }
+                method: 'GET', cache: 'no-store', headers: vaultHeaders({ 'Cache-Control': 'no-cache' })
             });
             const data = await response.json();
-            if (response.ok && data.success && Array.isArray(data.data?.accounts) && data.data.salt) {
+            if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return false;
+            if (response.status === 401 || response.status === 403) { discardVaultView(); return false; }
+            if (response.ok && data.success && Array.isArray(data.data?.accounts) && data.data.salt &&
+                data.data.user_id === VAULT_OWNER.userId && data.data.context === VAULT_OWNER.context) {
                 if (!await VaultDB.saveAll(data.data.accounts, {
-                    salt: data.data.salt, categories: data.data.categories || [],
+                    salt: data.data.salt, categories: data.data.categories || [], user: data.data.user || {},
                     synced_at: data.data.synced_at || new Date().toISOString(), rotation_pending: false
                 })) throw new Error('Offline storage is unavailable');
                 updateStatusPill(true);
+                renderVaultSnapshot(data.data.accounts, data.data.categories || [], data.data.user);
                 return true;
             }
         } catch (err) {
             console.warn('Network sync failed, using offline vault:', err);
         }
         updateStatusPill(false);
-        checkRenderOfflineVault();
+        await checkRenderOfflineVault();
         return false;
     };
     // Serialize cache replacement across tabs, including an entire key change.
@@ -200,18 +152,13 @@ async function syncVaultFromNetwork() {
 }
 
 async function checkRenderOfflineVault() {
-    const grid = document.getElementById('accountsList');
-    // If grid is missing or empty on offline page load, render from IndexedDB
-    const existingCards = document.querySelectorAll('#accountsList [data-account-id]');
-    if (!existingCards.length) {
-        const items = await VaultDB.getAll();
-        if (items && items.length) {
-            renderOfflineVaultCards(items);
-        }
-    }
+    if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
+    try { renderVaultSnapshot(await VaultDB.getAll(), await VaultDB.getMeta('categories') || [], await VaultDB.getMeta('user') || {}); }
+    catch { discardVaultView(); }
 }
 
 function renderOfflineVaultCards(items) {
+    if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
     const main = document.getElementById('mainContent');
     if (!main) return;
 
@@ -222,7 +169,9 @@ function renderOfflineVaultCards(items) {
     }
 
     grid.innerHTML = '';
-    items.forEach((acc, index) => {
+    items.forEach((account, index) => {
+        const acc = { ...account, id: Number(account.id) };
+        if (!Number.isSafeInteger(acc.id) || acc.id < 1) return;
         const letter = (acc.service_name || 'A').charAt(0).toUpperCase();
         const iconColor = iconColors[letter.charCodeAt(0) % iconColors.length];
 
@@ -236,12 +185,12 @@ function renderOfflineVaultCards(items) {
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0"
                      style="background:${iconColor}18; border:1.5px solid ${iconColor}44;">
-                    <span style="color:${iconColor};">${letter}</span>
+                    <span style="color:${iconColor};">${escapeHtml(letter)}</span>
                 </div>
                 <div class="flex-1 min-w-0">
                     <h3 class="font-bold text-sm truncate">${escapeHtml(acc.service_name)}</h3>
                     <div class="cursor-pointer group flex items-center gap-1 mt-0.5 w-max max-w-full"
-                         onclick="copyUserClipboard('${escapeJs(acc.username)}')"
+                         data-copy-username
                          title="Tap to copy username">
                         <span class="text-xs text-gray-400 group-hover:text-white transition-colors truncate account-username">
                             ${escapeHtml(acc.username)}
@@ -269,7 +218,7 @@ function renderOfflineVaultCards(items) {
                 </button>
             </div>
             <div class="flex gap-2">
-                <button onclick="copyUserClipboard('${escapeJs(acc.username)}')"
+                <button data-copy-username
                         class="tap-active flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-dark-bg/70 border border-dark-border/60 text-gray-300 hover:border-primary/40 hover:text-white text-xs font-semibold transition-all">
                     <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                     Copy User
@@ -290,6 +239,7 @@ function renderOfflineVaultCards(items) {
                 </div>
             ` : ''}
         `;
+        card.querySelectorAll('[data-copy-username]').forEach(button => button.addEventListener('click', () => copyUserClipboard(acc.username)));
         grid.appendChild(card);
     });
 
@@ -304,11 +254,6 @@ function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, m => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[m]);
-}
-
-function escapeJs(str) {
-    if (!str) return '';
-    return String(str).replace(/['\\]/g, '\\$&');
 }
 
 // ── 4. Search Logic ───────────────────────────────────────
@@ -572,6 +517,7 @@ function editAccount(accountId) {
 }
 
 async function getEffectiveSalt() {
+    if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return null;
     if (await VaultDB.getMeta('rotation_pending')) {
         showAlert('Reconnect and sign in online to refresh your vault before revealing or saving passwords.', 'warning');
         return null;
@@ -586,8 +532,8 @@ async function verifyVaultActionKey(password) {
     try {
         const salt = await getEffectiveSalt();
         if (salt === null) return null;
-        const key = await getVerifiedVaultKey(password, salt, typeof KEY_CHECK_CONTEXT === 'undefined' ? '' : KEY_CHECK_CONTEXT);
-        return isVaultLocked || masterPasswordChangeInProgress ? null : key;
+        const key = await getVerifiedVaultKey(password, salt, VAULT_OWNER?.context || '');
+        return isVaultLocked || masterPasswordChangeInProgress || !VaultDevice.matches(VAULT_OWNER) ? null : key;
     } catch (error) {
         showAlert(error.message || 'Could not verify your master key. Sign in online again.', 'error');
         return null;
@@ -595,6 +541,7 @@ async function verifyVaultActionKey(password) {
 }
 
 async function executeEditFetch(accountId, masterPassword) {
+    if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
     let acc = null;
     const salt = await getEffectiveSalt();
     if (salt === null) return;
@@ -603,7 +550,7 @@ async function executeEditFetch(accountId, masterPassword) {
         try {
             const r = await fetch(`api/accounts.php?action=get_account&id=${accountId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
                 body: new URLSearchParams({ action: 'get_account' })
             });
             const data = await r.json();
@@ -616,7 +563,7 @@ async function executeEditFetch(accountId, masterPassword) {
     }
 
     if (!acc) {
-        acc = await VaultDB.getItem(accountId);
+        try { acc = await VaultDB.getItem(accountId); } catch { return; }
     }
 
     if (!acc) {
@@ -626,6 +573,7 @@ async function executeEditFetch(accountId, masterPassword) {
 
     const key = await deriveKey(masterPassword, salt);
     const decryptedPassword = await decryptPasswordLocal(acc.password_encrypted, key);
+    if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
 
     if (decryptedPassword === null) {
         showAlert('Incorrect Master Key', 'error');
@@ -692,7 +640,7 @@ async function handleAccountSubmit(event) {
         const key = await verifyVaultActionKey(masterPass);
         if (!key) return;
         const encryptedPassword = await encryptPasswordLocal(password, key);
-        if (isVaultLocked || masterPasswordChangeInProgress) return;
+        if (isVaultLocked || masterPasswordChangeInProgress || !VaultDevice.matches(VAULT_OWNER)) return;
 
         const body = new URLSearchParams({
             service_name:  serviceName,
@@ -704,15 +652,15 @@ async function handleAccountSubmit(event) {
         });
         if (isEdit) body.append('id', accountId);
 
-        const response = await fetch(endpoint, { method: 'POST', headers: { 'X-CSRF-Token': CSRF_TOKEN }, body });
+        const response = await fetch(endpoint, { method: 'POST', headers: vaultHeaders({ 'X-CSRF-Token': CSRF_TOKEN }), body });
         const data = await response.json();
-
+        if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
         if (data.success) {
             showAlert(isEdit ? 'Account updated!' : 'Account added!', 'success');
             closeModal('accountModal');
             // Refresh local cache and UI
             await syncVaultFromNetwork();
-            setTimeout(() => location.reload(), 800);
+            setTimeout(() => { if (VaultDevice.matches(VAULT_OWNER) && !isVaultLocked) location.reload(); }, 800);
         } else {
             showAlert(data.message || 'Failed to save account', 'error');
         }
@@ -790,6 +738,7 @@ async function handleMasterKeySubmit(e) {
 const revealTimers = {};
 
 async function executeRevealPassword(accountId, btn, masterPassword) {
+    if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
     const displayEl = document.querySelector(`.password-display-${accountId}`);
     if (!displayEl) return;
 
@@ -808,7 +757,7 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
         try {
             const r = await fetch('api/accounts.php?action=reveal', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
                 body: new URLSearchParams({ action: 'reveal', id: accountId })
             });
             const data = await r.json();
@@ -822,7 +771,8 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
 
     // 2. Fallback to local IndexedDB
     if (!encryptedPassword) {
-        const localItem = await VaultDB.getItem(accountId);
+        let localItem;
+        try { localItem = await VaultDB.getItem(accountId); } catch { return; }
         if (localItem && localItem.password_encrypted) {
             encryptedPassword = localItem.password_encrypted;
             isOfflineDecrypted = true;
@@ -837,6 +787,7 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
     try {
         const key = await deriveKey(masterPassword, salt);
         const decryptedPassword = await decryptPasswordLocal(encryptedPassword, key);
+        if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
 
         if (decryptedPassword === null) {
             showAlert('Incorrect Master Key', 'error');
@@ -902,7 +853,7 @@ async function executeDeleteAccount(accountId, masterPassword) {
         if (!await verifyVaultActionKey(masterPassword)) return false;
         const response = await fetch('api/accounts.php?action=delete_account', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN },
+            headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN }),
             body: new URLSearchParams({ action: 'delete_account', id: accountId })
         });
         const data = await response.json();
@@ -959,9 +910,22 @@ function closeModal(id) {
     }
 }
 
-function executeLogout() {
-    clearVaultKeyCheck();
-    fetch('api/auth.php?action=logout').then(() => window.location.href = 'index.php');
+async function executeLogout() {
+    if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return false; }
+    const cleanup = VaultDevice.end(VAULT_OWNER);
+    discardVaultView('Signing out and removing this device’s vault copy…');
+    // Offline logout remains effective: the local revocation cookie blocks the old session on reconnect.
+    const request = fetch('api/auth.php?action=logout', { method: 'POST', cache: 'no-store', keepalive: true,
+        headers: { 'X-CSRF-Token': CSRF_TOKEN }, signal: AbortSignal.timeout(10000) }).catch(() => {});
+    try {
+        await cleanup;
+        await request;
+        window.location.replace('index.php');
+        return true;
+    } catch {
+        discardVaultView('Signed out, but browser cleanup could not finish. Close older SecureVault tabs and clear this site’s storage before sharing this browser.');
+        return false;
+    }
 }
 
 function logout() {
@@ -976,6 +940,7 @@ function switchTab(tab) {
 }
 
 function copyUserClipboard(text) {
+    if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
     if (!navigator.clipboard) {
         const ta = document.createElement('textarea');
         ta.value = text;
@@ -994,7 +959,7 @@ function copyUserClipboard(text) {
 
 async function handleSettingsSubmit(event) {
     event.preventDefault();
-    if (masterPasswordChangeInProgress) return;
+    if (masterPasswordChangeInProgress || isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
     const oldKey = document.getElementById('oldPassword').value;
     const newKey = document.getElementById('newPassword').value;
     const confirmKey = document.getElementById('confirmNewPassword').value;
@@ -1026,13 +991,14 @@ async function handleSettingsSubmit(event) {
         await navigator.locks.request(VAULT_CACHE_LOCK, async () => {
             // Never rotate from a possibly incomplete or stale IndexedDB copy.
             const fresh = await fetch('api/accounts.php?action=sync_vault', {
-                cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000)
+                cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000), headers: vaultHeaders()
             });
             const snapshot = await fresh.json();
             if (!fresh.ok || !snapshot.success || !Array.isArray(snapshot.data?.accounts) || !snapshot.data.salt) {
                 throw new Error('Could not load your current vault. Sign in online and try again.');
             }
             const vault = snapshot.data;
+            if (!VaultDevice.matches(VAULT_OWNER) || vault.user_id !== VAULT_OWNER.userId || vault.context !== VAULT_OWNER.context) throw new Error('Your sign-in changed. Nothing was changed.');
             const oldCryptoKey = await deriveKey(oldKey, vault.salt);
             const newCryptoKey = await deriveKey(newKey, vault.salt);
             const updatedAccounts = [];
@@ -1058,7 +1024,7 @@ async function handleSettingsSubmit(event) {
             requestStarted = true;
             const response = await fetch('api/auth.php?action=update_master_password', {
                 method: 'POST', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000),
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN },
+                headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN }),
                 body: new URLSearchParams({
                     old_password: oldKey, new_password: newKey, accounts: JSON.stringify(updatedAccounts)
                 })
@@ -1074,6 +1040,7 @@ async function handleSettingsSubmit(event) {
                 throw new Error('The server could not confirm the key change.');
             }
             changed = true;
+            if (!VaultDevice.matches(VAULT_OWNER)) return;
             clearVaultKeyCheck();
             let offlineRefreshFailed = false;
             try {
@@ -1171,6 +1138,7 @@ function initInactivityTracker() {
 
 function triggerInactivityLock() {
     if (isVaultLocked) return;
+    if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return; }
     isVaultLocked = true;
     clearVaultKeyCheck();
 
@@ -1220,7 +1188,7 @@ function triggerInactivityLock() {
 
     // 6. Asynchronously terminate server session
     try {
-        fetch('api/auth.php?action=logout', { method: 'GET', keepalive: true }).catch(() => {});
+        if (VaultDevice.matches(VAULT_OWNER)) fetch('api/auth.php?action=logout', { method: 'POST', keepalive: true, headers: { 'X-CSRF-Token': CSRF_TOKEN } }).catch(() => {});
     } catch (e) {
         console.warn('Inactivity logout request error:', e);
     }
@@ -1229,8 +1197,17 @@ function triggerInactivityLock() {
 // Developer / Automated testing hook
 window.__triggerInactivityLock = triggerInactivityLock;
 
+VaultDevice.subscribe(() => { if (!VaultDevice.matches(VAULT_OWNER)) discardVaultView(); });
+window.addEventListener('focus', () => { if (!VaultDevice.matches(VAULT_OWNER)) discardVaultView(); });
+window.addEventListener('pagehide', () => { discardVaultView(); });
+window.addEventListener('pageshow', event => {
+    if (event.persisted) location.reload();
+});
+
 // Network status listeners
 window.addEventListener('online', async () => {
+    if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return; }
+    if (OFFLINE_SHELL) { location.replace('dashboard.php'); return; }
     updateStatusPill(true);
     const synced = await syncVaultFromNetwork();
     showAlert(synced ? 'Reconnected. Vault synced!' : 'Reconnected. Sign in online to refresh your vault.', synced ? 'success' : 'warning');
@@ -1243,7 +1220,9 @@ window.addEventListener('offline', () => {
 
 // On load initialization
 window.addEventListener('DOMContentLoaded', () => {
+    if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return; }
     updateStatusPill(navigator.onLine);
+    checkRenderOfflineVault();
     syncVaultFromNetwork();
     initInactivityTracker();
 

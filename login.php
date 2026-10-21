@@ -379,6 +379,7 @@ $showRegister = isset($_GET['register']);
     </footer>
 
     <!-- ===== JAVASCRIPT LOGIC ===== -->
+    <script src="js/vault-storage.js?v=1"></script>
     <script src="js/vault-crypto.js?v=1"></script>
     <script>
         function showTab(tab) {
@@ -441,9 +442,13 @@ $showRegister = isset($_GET['register']);
                 const data = await response.json();
                 if (data.success) {
                     try {
-                        await rememberVaultKey(password, data.data?.salt, data.data?.context);
+                        await VaultDevice.start(data.data?.user_id, data.data?.context);
+                        const owner = { userId: data.data.user_id, context: data.data.context };
+                        await rememberVaultKey(password, data.data.salt, data.data.context, () => VaultDevice.matches(owner));
+                        await clearLegacyVaultCaches();
+                        if (!VaultDevice.matches(owner)) throw new Error('Your sign-in changed');
                     } catch {
-                        showAlert('Could not prepare your vault. Allow browser storage and use HTTPS or localhost, then sign in again.', 'error');
+                        showAlert('Could not prepare your vault. Allow browser storage, close older SecureVault tabs, then sign in again.', 'error');
                         return;
                     }
                     btn.innerHTML = `<span>Authenticated! Redirecting…</span>`;

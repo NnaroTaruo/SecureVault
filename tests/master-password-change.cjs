@@ -16,6 +16,7 @@ const chrome = process.env.SV_TEST_CHROME || (windows ? 'C:/Program Files/Google
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'securevault-rotation-test-'));
 const app = path.join(temporary, 'app');
 const children = [];
+const phpServers = [];
 const sockets = [];
 const oldPassword = 'Sample-old-vault-key-42!';
 const newPassword = 'Sample-new-vault-key-43!';
@@ -48,16 +49,31 @@ async function until(check, message, attempts = 100) {
     }
     throw new Error(message);
 }
+async function stopAppServer() {
+    const server = phpServers[0];
+    const ended = new Promise(resolve => server.once('exit', resolve));
+    server.kill();
+    await ended;
+}
+async function restartAppServer() {
+    phpServers[0] = background(php, phpServers[0].spawnargs.slice(1), app);
+    await until(async () => (await fetch(origins[0] + '/login.php')).status === 200, 'PHP server did not restart');
+}
 function sql(statement, database = true) {
     return run(path.join(mysqlBin, windows ? 'mysql.exe' : 'mysql'), ['--no-defaults', '--host=127.0.0.1', '--port=' + mysqlPort, '--user=root', '--batch', '--skip-column-names', ...(database ? ['--database=securevault_rotation_test'] : [])], { input: statement });
 }
 async function request(endpoint, body, context = {}, server = 0, csrf = context.csrf) {
     const response = await fetch(origins[server] + '/' + endpoint, {
         method: body === undefined ? 'GET' : 'POST', redirect: 'manual',
-        headers: { ...(context.cookie ? { Cookie: context.cookie } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
+        headers: { ...(context.cookie ? { Cookie: context.cookie } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...(context.vaultContext ? {'X-Vault-Context':context.vaultContext} : {}) },
         ...(body === undefined ? {} : { body: new URLSearchParams(body) }), signal: AbortSignal.timeout(15000)
     });
-    const cookie = response.headers.get('set-cookie')?.split(';')[0] || context.cookie;
+    const cookieJar = new Map((context.cookie || '').split('; ').filter(Boolean).map(value => [value.split('=')[0], value.slice(value.indexOf('=')+1)]));
+    for (const header of response.headers.getSetCookie()) {
+        const pair = header.split(';')[0]; const name = pair.split('=')[0]; const value = pair.slice(pair.indexOf('=')+1);
+        if (/max-age=0/i.test(header) || value === 'deleted') cookieJar.delete(name); else cookieJar.set(name,value);
+    }
+    const cookie = [...cookieJar].map(([name,value]) => name+'='+value).join('; ');
     return { status: response.status, data: await response.json(), cookie };
 }
 async function signIn(username, password, server = 0) {
@@ -66,7 +82,7 @@ async function signIn(username, password, server = 0) {
     const html = await (await fetch(origins[server] + '/dashboard.php', { headers: { Cookie: result.cookie } })).text();
     const csrf = html.match(/const CSRF_TOKEN = "([a-f0-9]+)"/);
     assert(csrf, 'The dashboard did not provide a CSRF token');
-    return { cookie: result.cookie, csrf: csrf[1], username };
+    return { cookie: result.cookie, csrf: csrf[1], username, vaultContext: result.data.data.context };
 }
 async function vault(context) {
     const result = await request('api/accounts.php?action=sync_vault', undefined, context);
@@ -128,7 +144,7 @@ async function setup() {
     fs.writeFileSync(path.join(app, 'config.php'), config);
     const sessions = path.join(temporary, 'sessions');
     fs.mkdirSync(sessions);
-    for (const value of ports) background(php, ['-d', 'session.save_path=' + sessions, '-d', 'log_errors=1', '-d', 'error_log=' + path.join(temporary, 'php-errors.log'), '-S', '127.0.0.1:' + value, '-t', app], app);
+    for (const value of ports) phpServers.push(background(php, ['-d', 'session.save_path=' + sessions, '-d', 'log_errors=1', '-d', 'error_log=' + path.join(temporary, 'php-errors.log'), '-S', '127.0.0.1:' + value, '-t', app], app));
     for (const origin of origins) await until(async () => (await fetch(origin + '/login.php')).status === 200, 'Isolated PHP server did not start');
 }
 async function serverChecks() {
@@ -220,7 +236,11 @@ async function browserPage(debugPort) {
         const marker = Date.now() + '-' + Math.random();
         await evaluate('window.testNavigationMarker = ' + JSON.stringify(marker));
         await command('Page.navigate', { url: origins[0] + endpoint });
-        await until(() => evaluate('window.testNavigationMarker !== ' + JSON.stringify(marker) + ' && location.pathname === ' + JSON.stringify(endpoint.split('?')[0]) + ' && document.readyState === "complete"'), 'Browser navigation did not finish: ' + endpoint);
+        try {
+            await until(() => evaluate('window.testNavigationMarker !== ' + JSON.stringify(marker) + ' && location.pathname === ' + JSON.stringify(endpoint.split('?')[0]) + ' && document.readyState === "complete"'), 'Browser navigation did not finish: ' + endpoint);
+        } catch (error) {
+            throw new Error(error.message + ' (current page: ' + await evaluate('location.pathname + location.search + "; " + document.readyState + "; " + document.title') + ')');
+        }
     };
     await command('Page.enable'); await command('Runtime.enable'); await command('Network.enable');
     await command('Network.setBlockedURLs', { urls: ['*://cdn.tailwindcss.com/*', '*://fonts.googleapis.com/*', '*://fonts.gstatic.com/*'] });
@@ -308,6 +328,94 @@ async function vaultActionChecks(page, signInBrowser, context) {
     console.log('PASS: empty-vault saves, edits, and deletions verify the signed-in key; wrong keys and invalid checks send no mutations; plaintext keys stay out of write requests; duplicate submits and locked saves are blocked; storage failures require another sign-in.');
 }
 
+async function offlineIsolationChecks(page, signInBrowser, debugPort) {
+    const alice = await createUser('offline-alice', 1);
+    const bob = await createUser('offline-bob', 1);
+    const a = await vault(alice);
+    const b = await vault(bob);
+    sql("UPDATE accounts SET service_name='Alice private service' WHERE id=" + a.accounts[0].id + "; UPDATE accounts SET service_name='Bob private service' WHERE id=" + b.accounts[0].id + "; UPDATE categories SET name='Alice private category' WHERE id=" + a.categories[0].id);
+    // Simulate the old release's unowned database and an unrelated application's cache.
+    await page.evaluate(`(async()=>{const cache=await caches.open('unrelated-app');await cache.put('/unrelated',new Response('keep me'));await new Promise((resolve,reject)=>{const r=indexedDB.open('SecureVaultDB',1);r.onupgradeneeded=()=>r.result.createObjectStore('vault_items');r.onsuccess=()=>{r.result.close();resolve()};r.onerror=()=>reject(r.error)})})()`);
+    await signInBrowser(oldPassword, alice.username);
+    assert.equal(await page.evaluate(`(async()=>!(await indexedDB.databases()).some(db=>db.name==='SecureVaultDB'))()`), true, 'Online sign-in must remove the old unowned database');
+    const oldTab = await browserPage(debugPort);
+    await oldTab.navigate('/dashboard.php').catch(error => { throw new Error('Account-switch setup: ' + error.message); });
+    await oldTab.evaluate('syncVaultFromNetwork()');
+    const oldCsrf = await oldTab.evaluate('CSRF_TOKEN');
+    const oldContext = await oldTab.evaluate('VAULT_OWNER.context');
+    const dbName = await page.evaluate('VaultDB.DB_NAME');
+    assert.match(await oldTab.evaluate('document.body.textContent'), /Alice private service/);
+    const html = await page.evaluate(`(async()=>await (await fetch('dashboard.php',{cache:'no-store'})).text())()`);
+    for (const value of ['offline-alice','Alice private service','Alice private category']) assert(!html.includes(value), 'Dashboard HTML must remain neutral');
+
+    await signInBrowser(oldPassword, bob.username);
+    await until(() => oldTab.evaluate('isVaultLocked'), 'Account switching must close the old tab');
+    for (const value of ['offline-alice','Alice private service','Alice private category']) assert(!(await oldTab.evaluate('document.documentElement.outerHTML')).includes(value), 'Old tabs must discard personal DOM and category options');
+    assert.equal(await oldTab.evaluate(`(async()=>{try{await VaultDB.getAll();return false}catch{return true}})()`), true, 'Old tabs must not read the new account copy');
+    assert.equal(await oldTab.evaluate(`(async()=>{try{await VaultDB.saveAll([{id:999,service_name:'stale'}]);return false}catch{return true}})()`), true, 'Old tabs must not overwrite the new account copy');
+    assert.equal(await oldTab.evaluate('syncVaultFromNetwork()'), false);
+    assert.equal(await oldTab.evaluate(`(async()=> (await fetch('api/accounts.php?action=sync_vault',{headers:vaultHeaders()})).status)()`), 403, 'The server must reject an old tab context even with the new session cookie');
+    assert.equal(await oldTab.evaluate('executeLogout()'), false, 'An old tab must not sign out the new account');
+    assert.equal(await page.evaluate(`(async()=> (await fetch('api/auth.php?action=logout',{method:'POST',headers:{'X-CSRF-Token':${JSON.stringify(oldCsrf)}}})).status)()`), 403, 'An old logout request must not end the new session');
+    const bobCheck = await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)');
+    await oldTab.evaluate('isVaultLocked=false;__triggerInactivityLock()');
+    assert.equal(await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)'), bobCheck, 'An old inactivity timer must not clear the new account check');
+    assert.deepEqual((await page.evaluate('VaultDB.getAll()')).map(account=>account.id), [Number(b.accounts[0].id)]);
+    assert.equal(await page.evaluate(`(async()=>{try{await rememberVaultKey('sample','sample',${JSON.stringify(oldContext)},()=>false);return false}catch{return true}})()`), true);
+    assert.equal(await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)'), bobCheck, 'Delayed sign-in cryptography must not replace a newer check');
+
+    const delayed = await browserPage(debugPort);
+    await delayed.navigate('/dashboard.php').catch(error => { throw new Error('Delayed-response setup: ' + error.message); });
+    await delayed.evaluate('syncVaultFromNetwork()');
+    // Hold a real, valid response while another tab signs out offline.
+    await delayed.evaluate(`window.realFetch=window.fetch;window.fetch=async(...args)=>{const response=await window.realFetch(...args);if(String(args[0]).includes('sync_vault')){window.responseHeld=true;await new Promise(resolve=>window.releaseResponse=resolve)}return response};window.delayedSync=syncVaultFromNetwork();'started'`);
+    await until(() => delayed.evaluate('window.responseHeld'), 'The delayed sync response did not arrive');
+    const tokens = await page.evaluate('[CSRF_TOKEN,VAULT_OWNER.context]');
+    const cached = await page.evaluate(`(async()=>{const entries=[];for(const name of await caches.keys()){if(!name.startsWith('securevault:'))continue;const cache=await caches.open(name);for(const request of await cache.keys()){const response=await cache.match(request);entries.push({url:request.url,text:await response.text()})}}return entries})()`);
+    assert(cached.some(entry=>entry.url.endsWith('dashboard.php?offline_shell=1')), 'The neutral offline shell must be cached');
+    for (const entry of cached) for (const value of ['offline-alice','offline-bob','Alice private service','Bob private service',...tokens]) assert(!entry.text.includes(value), 'Cached pages must not contain personal fields or session tokens');
+    // Page-level CDP offline emulation does not reliably affect service-worker fetches.
+    await stopAppServer();
+    await page.command('Network.emulateNetworkConditions', {offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+    await delayed.command('Network.emulateNetworkConditions', {offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+    await page.navigate('/dashboard.php');
+    assert.equal(await page.evaluate('OFFLINE_SHELL'), true, 'Disconnected navigation must use the neutral shell');
+    await page.evaluate('checkRenderOfflineVault()');
+    const offlinePassword = await page.evaluate(`(async()=>{const account=(await VaultDB.getAll())[0];await executeRevealPassword(account.id,null,${JSON.stringify(oldPassword)});return document.querySelector('.password-display-'+account.id).textContent})()`);
+    assert.match(offlinePassword, /Saved example/, 'The current account must decrypt with the server stopped');
+    await page.evaluate('void executeLogout();"started"');
+    await until(() => delayed.evaluate('isVaultLocked'), 'Offline sign-out must close the other tab before waiting on its response');
+    await delayed.evaluate('window.releaseResponse();"released"');
+    assert.equal(await delayed.evaluate('window.delayedSync'), false, 'A delayed response must not restore signed-out data');
+    await until(() => page.evaluate('location.pathname.endsWith("index.php") && document.readyState==="complete"'), 'Offline sign-out did not finish cleanup');
+    const rawCounts = () => page.evaluate(`(async()=>new Promise((resolve,reject)=>{const r=indexedDB.open(${JSON.stringify(dbName)});r.onsuccess=()=>{const db=r.result;const tx=db.transaction(['vault_items','vault_meta']);const counts=[];for(const name of ['vault_items','vault_meta']){const c=tx.objectStore(name).count();c.onsuccess=()=>counts.push(c.result)}tx.oncomplete=()=>{db.close();resolve(counts)};tx.onerror=()=>reject(tx.error)};r.onerror=()=>reject(r.error)}))()`);
+    assert.deepEqual(await rawCounts(), [0,0], 'Explicit offline sign-out must physically clear entries and metadata');
+    assert.equal(await page.evaluate('localStorage.getItem("securevault-key-check")'), null);
+    assert.equal(await page.evaluate(`(async()=>await (await caches.match('/unrelated')).text())()`), 'keep me', 'Sign-out must preserve unrelated app caches');
+    await page.navigate('/dashboard.php').catch(error => { throw new Error('Offline reload after sign-out: ' + error.message); });
+    assert.equal(await page.evaluate('OFFLINE_SHELL'), true);
+    assert.equal(await page.evaluate('isVaultLocked'), true);
+    assert(!(await page.evaluate('document.body.textContent')).includes('Bob private service'), 'Offline reload after logout must remain closed');
+    // Reconnect without letting the browser's online handler navigate; inspect the old cookie directly.
+    const cookies = (await page.command('Network.getCookies', {urls:[origins[0]]})).cookies.map(cookie=>cookie.name+'='+cookie.value).join('; ');
+    assert(cookies.includes('sv_signed_out=1'));
+    assert.equal((await request('api/auth.php?action=me', undefined, {cookie:cookies}, 1)).status, 401, 'Offline logout must invalidate the old server session on its next connected request');
+    await restartAppServer();
+    await page.command('Network.emulateNetworkConditions', {offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+    await signInBrowser(oldPassword, bob.username);
+    await page.evaluate('window.realReset=VaultDB.reset;VaultDB.reset=async()=>{throw new Error("simulated cleanup failure")}');
+    assert.equal(await page.evaluate('executeLogout()'), false, 'Cleanup failure must not report success');
+    assert.match(await page.evaluate('document.body.textContent'), /browser cleanup could not finish/);
+    assert.equal(await page.evaluate('VaultDevice.active()'), null, 'Failed cleanup must still revoke device access');
+    await page.evaluate('VaultDB.reset=window.realReset');
+    await signInBrowser(oldPassword, bob.username);
+    assert.equal((await page.evaluate('VaultDB.getAll()')).length, 1, 'Signing in must recover the correct account after cleanup failure');
+    await page.evaluate('void executeLogout();"started"');
+    await until(() => page.evaluate('location.pathname.endsWith("index.php") && document.readyState==="complete"'), 'Online sign-out did not finish');
+    assert.deepEqual(await rawCounts(), [0,0]);
+    console.log('PASS: account switching isolates cache and tabs; neutral cached pages contain no personal data; explicit online/offline logout clears device storage; delayed replies cannot restore it; cleanup failure revokes access and explains recovery.');
+}
+
 async function browserChecks() {
     const context = await createUser('browser-check');
     const debugPort = await port();
@@ -370,7 +478,7 @@ async function browserChecks() {
     assert.equal((await request('api/auth.php?action=login', {username:context.username,password:oldPassword})).status, 401);
     await signInBrowser(newPassword);
     const currentSession = await signIn(context.username, newPassword);
-    assert.equal((await request('api/accounts.php?action=delete_account', {id:cached[0].id}, {cookie:currentSession.cookie,csrf:context.csrf})).status, 403, 'An old tab must not write using its stale page token after another tab signs in again');
+    assert.equal((await request('api/accounts.php?action=delete_account', {id:cached[0].id}, {...currentSession,csrf:context.csrf})).status, 403, 'An old tab must not write using its stale page token after another tab signs in again');
     // Exercise the normal add/delete UI after the new CSRF checks.
     await page.evaluate(`openAddAccountModal();document.getElementById('serviceName').value='Disposable sample';document.getElementById('category').value=${JSON.stringify(String(beforeFailure.categories[0].id))};document.getElementById('accountUsername').value='sample';document.getElementById('accountPassword').value='Disposable saved password!';document.getElementById('masterPassword').value=${JSON.stringify(newPassword)};handleAccountSubmit({preventDefault(){}})`);
     await sleep(1100);
@@ -378,14 +486,18 @@ async function browserChecks() {
     await page.evaluate(`(async()=>{const account=(await VaultDB.getAll()).find(item=>item.service_name==='Disposable sample');await executeDeleteAccount(account.id,${JSON.stringify(newPassword)})})()`);
     assert.equal((await page.evaluate('VaultDB.getAll()')).length, 2, 'The account delete flow must still work');
     await until(() => page.evaluate('Boolean(navigator.serviceWorker.controller)'), 'Service worker did not control the sample dashboard');
-    await until(() => page.evaluate('(async()=>Boolean(await caches.match(location.href)))()'), 'The offline dashboard was not cached');
+    await until(() => page.evaluate('(async()=>Boolean(await caches.match(new URL("dashboard.php?offline_shell=1",location.href))))()'), 'The neutral offline dashboard was not cached');
+    await stopAppServer();
     await page.command('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
     await page.navigate('/dashboard.php');
     assert.equal(await page.evaluate('navigator.onLine'), false);
+    await page.evaluate('checkRenderOfflineVault()');
     const revealed = await page.evaluate(`(async()=>{const accounts=await VaultDB.getAll();const id=accounts[0].id;await executeRevealPassword(id,null,${JSON.stringify(newPassword)});return document.querySelector('.password-display-'+id).textContent})()`);
     assert.match(revealed, /Saved example/, 'The new key must reveal an entry after an offline reload');
+    assert.equal(await page.evaluate('OFFLINE_SHELL'), true);
+    await restartAppServer();
     await page.command('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
-    await page.navigate('/dashboard.php');
+    await until(() => page.evaluate('OFFLINE_SHELL === false && document.readyState === "complete"'), 'Reconnecting must reload the authenticated dashboard');
     await page.evaluate('syncVaultFromNetwork()');
     console.log('PASS: browser storage failures preserve data; a missing local vault is refreshed; stale tabs cannot write; add/delete still work; queued sync cannot restore old ciphertext; the new key works after an offline reload.');
 
@@ -409,6 +521,7 @@ async function browserChecks() {
     for (const account of await page.evaluate('VaultDB.getAll()')) await decrypt(account.password_encrypted, await key(fourthPassword, salt));
     assert(!fs.existsSync(path.join(app, 'api/debug.txt')), 'Authentication requests must not create a debug log');
     console.log('PASS: lost-response and post-commit storage failures recover by signing in with the new key, without losing entries.');
+    await offlineIsolationChecks(page, signInBrowser, debugPort);
 }
 
 (async () => {
