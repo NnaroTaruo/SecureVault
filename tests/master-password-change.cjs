@@ -217,25 +217,108 @@ async function browserPage(debugPort) {
         return result.result.value;
     };
     const navigate = async endpoint => {
+        const marker = Date.now() + '-' + Math.random();
+        await evaluate('window.testNavigationMarker = ' + JSON.stringify(marker));
         await command('Page.navigate', { url: origins[0] + endpoint });
-        await until(() => evaluate('location.pathname === ' + JSON.stringify(endpoint.split('?')[0]) + ' && document.readyState === "complete"'), 'Browser navigation did not finish: ' + endpoint);
+        await until(() => evaluate('window.testNavigationMarker !== ' + JSON.stringify(marker) + ' && location.pathname === ' + JSON.stringify(endpoint.split('?')[0]) + ' && document.readyState === "complete"'), 'Browser navigation did not finish: ' + endpoint);
     };
     await command('Page.enable'); await command('Runtime.enable'); await command('Network.enable');
     await command('Network.setBlockedURLs', { urls: ['*://cdn.tailwindcss.com/*', '*://fonts.googleapis.com/*', '*://fonts.gstatic.com/*'] });
     await command('Page.addScriptToEvaluateOnNewDocument', { source: 'window.tailwind = {}; try { localStorage.setItem("seen_update_v1_3_enhanced", "true"); } catch {}' });
     return { evaluate, navigate, command };
 }
+async function vaultActionChecks(page, signInBrowser, context) {
+    const empty = await createUser('empty-browser-check', 0);
+    const previousCheck = await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)');
+    await signInBrowser(oldPassword, empty.username);
+    const emptyCheck = await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)');
+    assert(!emptyCheck.includes(oldPassword), 'Browser key checks must not store the master password');
+    const observeWrites = () => page.evaluate(`window.actionWrites=[];window.actionFetch=window.fetch;window.fetch=(url,options)=>{if(/action=(add_account|update|delete_account)(?:&|$)/.test(String(url)))window.actionWrites.push({url:String(url),body:String(options.body)});return window.actionFetch(url,options)};true`);
+    const save = password => page.evaluate(`(async()=>{openAddAccountModal();document.getElementById('serviceName').value='Verified sample';document.getElementById('category').value=String((await VaultDB.getMeta('categories'))[0].id);document.getElementById('accountUsername').value='sample';document.getElementById('accountPassword').value='Saved example verified 🔐';document.getElementById('masterPassword').value=${JSON.stringify(password)};await handleAccountSubmit({preventDefault(){}})})()`);
+    const writes = () => page.evaluate('window.actionWrites.length');
+    await observeWrites();
+    for (const encoded of [null, '{invalid', previousCheck, JSON.stringify({...JSON.parse(emptyCheck), salt:'wrong-salt'}), JSON.stringify({...JSON.parse(emptyCheck), encrypted:'invalid'})]) {
+        await page.evaluate(encoded === null ? 'localStorage.removeItem(VAULT_KEY_CHECK_STORAGE)' : `localStorage.setItem(VAULT_KEY_CHECK_STORAGE,${JSON.stringify(encoded)})`);
+        await save(oldPassword);
+        assert.equal(await writes(), 0, 'Missing, malformed, wrong-session, wrong-salt, and damaged checks must block saves');
+    }
+    await page.evaluate(`localStorage.setItem(VAULT_KEY_CHECK_STORAGE,${JSON.stringify(emptyCheck)})`);
+    await save('Mistyped-master-key-99!');
+    assert.equal(await writes(), 0, 'A wrong key must not send a save request, even in an empty vault');
+    assert.equal((await vault(empty)).accounts.length, 0);
+    assert.match(await page.evaluate('document.getElementById("alertArea").textContent'), /Incorrect master key/);
+    assert.equal(await page.evaluate('document.querySelector("#accountForm button[type=submit]").disabled'), false);
+
+    await page.evaluate(`window.realStorageGet=Storage.prototype.getItem;Storage.prototype.getItem=function(name){if(name===VAULT_KEY_CHECK_STORAGE)throw new DOMException('blocked','SecurityError');return window.realStorageGet.call(this,name)}`);
+    await save(oldPassword);
+    assert.equal(await writes(), 0, 'Unavailable storage must fail closed');
+    await page.evaluate('Storage.prototype.getItem=window.realStorageGet');
+    await page.evaluate(`document.getElementById('masterPassword').value=${JSON.stringify(oldPassword)};Promise.all([handleAccountSubmit({preventDefault(){}}),handleAccountSubmit({preventDefault(){}})])`);
+    assert.equal(await writes(), 1, 'Repeated submit must create only one entry');
+    const posted = await page.evaluate('window.actionWrites[0].body');
+    for (const value of new URLSearchParams(posted).values()) assert(!value.includes(oldPassword) && !value.includes('Saved example verified'), 'Save requests must contain ciphertext, not plaintext keys or passwords');
+    assert.equal(await page.evaluate('document.getElementById("masterPassword").value'), '');
+    assert.equal(await page.evaluate('document.getElementById("accountPassword").value'), '');
+    const first = (await vault(empty)).accounts[0];
+    assert.equal(await decrypt(first.password_encrypted, await key(oldPassword, (await vault(empty)).salt)), 'Saved example verified 🔐');
+    await page.navigate('/dashboard.php');
+    await page.evaluate('syncVaultFromNetwork()');
+    await observeWrites();
+    await page.evaluate(`deleteAccount(${first.id});document.getElementById('promptMasterKey').value='Wrong-delete-key!';handleMasterKeySubmit({preventDefault(){}})`);
+    assert.equal(await writes(), 0, 'A wrong delete key must not send a delete request');
+    assert.equal((await vault(empty)).accounts.length, 1);
+    assert.equal(await page.evaluate('document.getElementById("masterKeyModal").classList.contains("hidden")'), false);
+    assert.equal(await page.evaluate('document.getElementById("promptMasterKey").value'), '');
+    assert.equal(await page.evaluate('document.getElementById("masterKeySubmitBtn").disabled'), false);
+    await page.evaluate(`localStorage.setItem(VAULT_KEY_CHECK_STORAGE,'invalid')`);
+    assert.equal(await page.evaluate(`executeDeleteAccount(${first.id},${JSON.stringify(oldPassword)})`), false);
+    assert.equal(await writes(), 0, 'A damaged check must also block deletion');
+    const deletionWrites = await page.evaluate(`(async()=>{localStorage.setItem(VAULT_KEY_CHECK_STORAGE,${JSON.stringify(emptyCheck)});document.getElementById('promptMasterKey').value=${JSON.stringify(oldPassword)};await handleMasterKeySubmit({preventDefault(){}});return window.actionWrites})()`);
+    assert.equal(deletionWrites.length, 1);
+    assert.equal((await vault(empty)).accounts.length, 0, 'A correct key must still delete the last entry');
+    const deletion = new URLSearchParams(deletionWrites[0].body);
+    assert.deepEqual([...deletion.keys()].sort(), ['action','id'], 'Deletion must not send the key to PHP');
+    await page.navigate('/dashboard.php');
+    await observeWrites();
+    await page.evaluate('__triggerInactivityLock()');
+    assert.equal(await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)'), null);
+    await save(oldPassword);
+    assert.equal(await writes(), 0, 'A locked vault must not save');
+
+    // A successful server sign-in must not redirect if its browser check could not be stored.
+    await page.navigate('/login.php');
+    await page.evaluate(`window.realStorageSet=Storage.prototype.setItem;Storage.prototype.setItem=function(name,value){if(name===VAULT_KEY_CHECK_STORAGE)throw new DOMException('blocked','QuotaExceededError');return window.realStorageSet.call(this,name,value)};document.getElementById('login-username').value=${JSON.stringify(empty.username)};document.getElementById('login-password').value=${JSON.stringify(oldPassword)};handleLoginSubmit({preventDefault(){},target:document.getElementById('loginFormElement')})`);
+    assert.equal(await page.evaluate('location.pathname'), '/login.php');
+    assert.match(await page.evaluate('document.getElementById("alertArea").textContent'), /Allow browser storage/);
+    assert.equal(await page.evaluate('document.getElementById("login-password").value'), '');
+    await page.evaluate('Storage.prototype.setItem=window.realStorageSet');
+    await signInBrowser(oldPassword);
+    await observeWrites();
+    const before = await vault(context);
+    await page.evaluate(`executeEditFetch(${before.accounts[0].id},${JSON.stringify(oldPassword)})`);
+    await page.evaluate(`document.getElementById('masterPassword').value='Wrong-edit-key!';document.getElementById('accountPassword').value='Saved example updated 🔐';handleAccountSubmit({preventDefault(){}})`);
+    assert.equal(await writes(), 0);
+    assert.equal((await vault(context)).accounts[0].password_encrypted, before.accounts[0].password_encrypted, 'A wrong key must not overwrite an existing entry');
+    await page.evaluate(`document.getElementById('masterPassword').value=${JSON.stringify(oldPassword)};handleAccountSubmit({preventDefault(){}})`);
+    assert.equal(await writes(), 1);
+    const after = await vault(context);
+    assert.equal(await decrypt(after.accounts[0].password_encrypted, await key(oldPassword, after.salt)), 'Saved example updated 🔐');
+    await page.navigate('/dashboard.php');
+    await page.evaluate('syncVaultFromNetwork()');
+    console.log('PASS: empty-vault saves, edits, and deletions verify the signed-in key; wrong keys and invalid checks send no mutations; plaintext keys stay out of write requests; duplicate submits and locked saves are blocked; storage failures require another sign-in.');
+}
+
 async function browserChecks() {
     const context = await createUser('browser-check');
     const debugPort = await port();
     background(chrome, ['--headless=new', '--disable-gpu', ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []), '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=' + debugPort, '--user-data-dir=' + path.join(temporary, 'chrome'), 'about:blank']);
     await until(async () => (await fetch('http://127.0.0.1:' + debugPort + '/json/version')).ok, 'Isolated Chrome did not start');
     const page = await browserPage(debugPort);
-    const signInBrowser = async password => {
+    const signInBrowser = async (password, username = 'browser-check') => {
+        await page.command('Network.clearBrowserCookies');
         await page.navigate('/login.php');
-        const status = await page.evaluate(`(async () => (await fetch('api/auth.php?action=login', {method:'POST',body:new URLSearchParams({username:'browser-check',password:${JSON.stringify(password)}})})).status)()`);
-        assert.equal(status, 200);
-        await page.navigate('/dashboard.php');
+        await page.evaluate(`document.getElementById('login-username').value=${JSON.stringify(username)};document.getElementById('login-password').value=${JSON.stringify(password)};void handleLoginSubmit({preventDefault(){},target:document.getElementById('loginFormElement')});'started'`);
+        await until(() => page.evaluate('location.pathname.endsWith("dashboard.php") && document.readyState === "complete"'), 'Browser sign-in did not prepare the key check and open the vault');
         assert.equal(await page.evaluate('syncVaultFromNetwork()'), true);
     };
     const beginChange = async (previous, next, wait = true) => {
@@ -243,6 +326,7 @@ async function browserChecks() {
         await page.evaluate(script + (wait ? 'window.testChange' : '"started"'));
     };
     await signInBrowser(oldPassword);
+    await vaultActionChecks(page, signInBrowser, context);
     await page.evaluate('VaultDB.saveAll([], {rotation_pending:false})');
     await beginChange('Incorrect-current-key!', newPassword);
     assert.match(await page.evaluate('document.getElementById("keyChangeStatus").textContent'), /Nothing was changed/);

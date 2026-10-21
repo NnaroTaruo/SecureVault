@@ -46,5 +46,5 @@ jobs:
         run: php tests/auth-privacy.php
 
       # The runner includes MySQL and Chrome. The test creates its own data directory.
-      - name: Check master-password changes and offline recovery
+      - name: Check vault actions, master-password changes, and offline recovery
         run: node tests/master-password-change.cjs

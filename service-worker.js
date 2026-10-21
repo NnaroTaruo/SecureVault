@@ -1,4 +1,4 @@
-const CACHE_NAME = 'securevault-v12';
+const CACHE_NAME = 'securevault-v13';
 const SHELL_ASSETS = [
     './',
     './index.php',
@@ -9,6 +9,7 @@ const SHELL_ASSETS = [
     './icon-192.png',
     './icon-512.png',
     './css/style.css',
+    './js/vault-crypto.js?v=1',
     './js/dashboard.js',
     './js/pwa.js'
 ];

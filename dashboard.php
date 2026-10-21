@@ -171,7 +171,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 </header>
 
 <!-- Alert fixed toast area -->
-<div id="alertArea" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none child:pointer-events-auto"></div>
+<div id="alertArea" class="fixed top-20 left-1/2 -translate-x-1/2 z-[60] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none child:pointer-events-auto"></div>
 
 <!-- ===== CATEGORY CHIPS (horizontal scroll) ===== -->
 <div class="fixed top-[68px] left-0 right-0 z-10 bg-dark-bg overflow-x-auto hide-scrollbar md:ml-64">
@@ -957,6 +957,7 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
 <script>
     const USER_SALT = "<?php echo isset($_SESSION['master_key_salt']) ? addslashes($_SESSION['master_key_salt']) : ''; ?>";
     const CSRF_TOKEN = <?php echo json_encode($_SESSION['csrf_token']); ?>;
+    const KEY_CHECK_CONTEXT = <?php echo json_encode($_SESSION['key_check_context'] ?? ''); ?>;
 </script>
 <!-- About App Modal -->
 <div id="aboutModal"
@@ -1000,7 +1001,8 @@ $iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B5
     </div>
 </div>
 
-<script src="js/dashboard.js?v=10"></script>
+<script src="js/vault-crypto.js?v=1"></script>
+<script src="js/dashboard.js?v=11"></script>
 <script src="js/pwa.js"></script>
 
 <!-- PWA Install Banner (Premium) -->

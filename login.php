@@ -379,6 +379,7 @@ $showRegister = isset($_GET['register']);
     </footer>
 
     <!-- ===== JAVASCRIPT LOGIC ===== -->
+    <script src="js/vault-crypto.js?v=1"></script>
     <script>
         function showTab(tab) {
             const isLogin = tab === 'login';
@@ -420,37 +421,44 @@ $showRegister = isset($_GET['register']);
             }, 6000);
         }
 
-        function handleLoginSubmit(e) {
+        async function handleLoginSubmit(e) {
             e.preventDefault();
             const username = document.getElementById('login-username').value.trim();
-            const password = document.getElementById('login-password').value;
+            let password = document.getElementById('login-password').value;
             const btn      = e.target.querySelector('button[type=submit]');
+            if (btn.disabled) return;
             const origHtml = btn.innerHTML;
 
             btn.disabled  = true;
             btn.innerHTML = `<span>Unlocking Vault…</span>`;
 
-            fetch('api/auth.php?action=login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ action: 'login', username, password })
-            })
-            .then(r => r.json())
-            .then(data => {
+            try {
+                const response = await fetch('api/auth.php?action=login', {
+                    method: 'POST', cache: 'no-store',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ action: 'login', username, password })
+                });
+                const data = await response.json();
                 if (data.success) {
+                    try {
+                        await rememberVaultKey(password, data.data?.salt, data.data?.context);
+                    } catch {
+                        showAlert('Could not prepare your vault. Allow browser storage and use HTTPS or localhost, then sign in again.', 'error');
+                        return;
+                    }
                     btn.innerHTML = `<span>Authenticated! Redirecting…</span>`;
                     window.location.href = 'dashboard.php';
                 } else {
                     showAlert(data.message || 'Authentication failed. Check your username and master key.', 'error');
-                    btn.disabled  = false;
-                    btn.innerHTML = origHtml;
                 }
-            })
-            .catch(() => {
+            } catch {
                 showAlert('Network communication error. Please try again.', 'error');
+            } finally {
+                password = '';
+                document.getElementById('login-password').value = '';
                 btn.disabled  = false;
                 btn.innerHTML = origHtml;
-            });
+            }
         }
 
         function handleRegisterSubmit(e) {

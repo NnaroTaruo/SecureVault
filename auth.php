@@ -155,8 +155,12 @@ function loginUser($username, $password) {
         $_SESSION['session_token'] = $sessionToken;
         $_SESSION['username'] = $user['username'];
         $_SESSION['master_key_salt'] = $user['master_key_salt'];
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['key_check_context'] = bin2hex(random_bytes(16));
         
-        return ['success' => true, 'message' => 'Login successful'];
+        return ['success' => true, 'message' => 'Login successful', 'key_check' => [
+            'salt' => $user['master_key_salt'], 'context' => $_SESSION['key_check_context']
+        ]];
     } else {
         $db->rollback();
         return ['success' => false, 'message' => 'Login failed'];
