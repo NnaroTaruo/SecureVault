@@ -253,6 +253,15 @@ function verifySession() {
     if (!isLoggedIn()) {
         return false;
     }
+    // Older releases lack the browser-bound sign-in metadata. Retire those sessions
+    // so login.php can show the gateway instead of redirecting to a closed vault.
+    if (!is_string($_SESSION['key_check_context'] ?? null)
+        || !preg_match('/^[a-f0-9]{32}$/D', $_SESSION['key_check_context'])
+        || empty($_SESSION['csrf_token'])) {
+        logoutUser();
+        $_SESSION = [];
+        return false;
+    }
     // An offline explicit sign-out must also block the old HTTP session on reconnect.
     if (($_COOKIE['sv_signed_out'] ?? '') === '1') {
         logoutUser();

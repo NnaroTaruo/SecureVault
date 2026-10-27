@@ -223,6 +223,24 @@ async function serverChecks() {
     for (const account of after.accounts) await decrypt(account.password_encrypted, await key(newPassword, after.salt));
     console.log('PASS: concurrent old-session writes and old-password sign-ins cannot cross a successful rotation.');
 }
+async function legacySessionChecks() {
+    const context = await createUser('legacy-session-check',1);
+    const snapshot = await vault(context);
+    for (const field of ['key_check_context','csrf_token']) {
+        const session = await signIn(context.username,oldPassword);
+        const id = session.cookie.match(/(?:^|; )PHPSESSID=([^;]+)/)?.[1];
+        assert(id,'The isolated PHP session cookie must be available');
+        run(php,['-d','session.save_path='+path.join(temporary,'sessions'),'-r', 'session_id($argv[1]);session_start();unset($_SESSION[$argv[2]]);session_write_close();',id,field]);
+        const login = await fetch(origins[0]+'/login.php',{headers:{Cookie:session.cookie},redirect:'manual'});
+        assert.equal(login.status,200,'Legacy sessions must reach the sign-in gateway instead of redirecting into a closed vault');
+        assert((await login.text()).includes('id="loginFormElement"'));
+        assert.equal((await request('api/auth.php?action=me',undefined,session)).status,401,'Legacy sessions must no longer authorize API access');
+        const current = await signIn(context.username,oldPassword);
+        assert.deepEqual((await vault(current)).accounts,snapshot.accounts,'Retiring a legacy sign-in must preserve the vault');
+    }
+    console.log('PASS: legacy sessions missing browser-bound metadata return to sign-in and preserve vault entries.');
+}
+
 async function loginRateChecks() {
     const context = await createUser('throttle-check', 1);
     const snapshot = await vault(context);
@@ -649,6 +667,7 @@ async function browserChecks() {
     try {
         await setup();
         await serverChecks();
+        await legacySessionChecks();
         await loginRateChecks();
         await browserChecks();
         console.log('PASS: safe master-password change integration checks completed.');
