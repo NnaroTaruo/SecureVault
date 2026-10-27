@@ -48,3 +48,11 @@ CREATE TABLE sessions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_session_token (session_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Expiring server-side login counters; contains no plaintext identifiers or credentials.
+CREATE TABLE login_throttles (
+    bucket_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+    failures INT UNSIGNED NOT NULL DEFAULT 0,
+    reset_at BIGINT UNSIGNED NOT NULL,
+    INDEX idx_login_throttle_expiry (reset_at)
+) ENGINE=InnoDB;

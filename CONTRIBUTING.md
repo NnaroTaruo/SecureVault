@@ -10,8 +10,8 @@ Never commit `config.php`, real SQL dumps, passwords, authentication logs, or ho
 
 After a repository history cleanup, clone the repository again. Merging or pushing an old clone can restore the removed logs.
 
-GitHub runs the **Checks** workflow on pushes and pull requests. It checks syntax, authentication privacy, master-key confirmations and changes, offline account isolation, and logout cleanup. Open the pull request's **Checks** tab to see the result and any failure details.
+GitHub runs the **Checks** workflow on pushes and pull requests. It checks syntax, authentication privacy, login cooldowns, master-key confirmations and changes, offline account isolation, and logout cleanup. Open the pull request's **Checks** tab to see the result and any failure details.
 
-For password-change, vault-action, or offline-storage work, also run `node tests/master-password-change.cjs`. It starts an isolated sample MySQL/MariaDB database, PHP servers, and headless Chrome; it never uses your private configuration or vault. Defaults target XAMPP and Chrome on Windows, or MySQL 8 and Chrome on Ubuntu. Override `SV_TEST_PHP`, `SV_TEST_MYSQL_BIN`, `SV_TEST_MYSQLD`, or `SV_TEST_CHROME` for other installation paths. Use Node.js 22.4+ for the test's built-in WebSocket client; CI uses Node.js 24 and PHP 8.3.
+For authentication, password-change, vault-action, or offline-storage work, also run `node tests/master-password-change.cjs`. It starts an isolated sample MySQL/MariaDB database, PHP servers, and headless Chrome; it never uses your private configuration or vault. Defaults target XAMPP and Chrome on Windows, or MySQL 8 and Chrome on Ubuntu. Override `SV_TEST_PHP`, `SV_TEST_MYSQL_BIN`, `SV_TEST_MYSQLD`, or `SV_TEST_CHROME` for other installation paths. Use Node.js 22.4+ for the test's built-in WebSocket client; CI uses Node.js 24 and PHP 8.3.
 
 By contributing your own work, you agree that it is available under the project's [MIT license](LICENSE). Identify any third-party code or assets and preserve their license notices.

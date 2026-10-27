@@ -113,43 +113,103 @@ function registerUser($username, $email, $password, $confirmPassword) {
 }
 
 /**
- * Login user
+ * Lock a persistent counter before checking credentials. Must run in a transaction.
  */
+function lockLoginCounter($db, $bucket, $duration) {
+    $hash = hash('sha256', $bucket);
+    $stmt = $db->prepare('INSERT INTO login_throttles (bucket_hash, failures, reset_at) VALUES (?, 0, UNIX_TIMESTAMP() + ?) ON DUPLICATE KEY UPDATE bucket_hash = bucket_hash');
+    $stmt->bind_param('si', $hash, $duration);
+    $stmt->execute();
+    // The upsert already holds the row lock; this clock is read after any wait.
+    $stmt = $db->prepare('SELECT failures, reset_at, UNIX_TIMESTAMP() AS now FROM login_throttles WHERE bucket_hash = ? FOR UPDATE');
+    $stmt->bind_param('s', $hash);
+    $stmt->execute();
+    $counter = $stmt->get_result()->fetch_assoc();
+    $counter['bucket_hash'] = $hash;
+    if ((int)$counter['reset_at'] <= (int)$counter['now']) {
+        $counter['failures'] = 0;
+        $counter['reset_at'] = (int)$counter['now'] + $duration;
+    }
+    return $counter;
+}
+
+function recordLoginFailure($db, $counter, $limit, $duration, $now) {
+    $failures = (int)$counter['reset_at'] <= $now ? 1 : (int)$counter['failures'] + 1;
+    $resetAt = $failures === 1 || $failures >= $limit ? $now + $duration : (int)$counter['reset_at'];
+    $stmt = $db->prepare('UPDATE login_throttles SET failures = ?, reset_at = ? WHERE bucket_hash = ?');
+    $stmt->bind_param('iis', $failures, $resetAt, $counter['bucket_hash']);
+    $stmt->execute();
+    return $failures >= $limit ? max(1, $resetAt - $now) : 0;
+}
+
+function loginCooldown($retryAfter) {
+    $minutes = (int)ceil($retryAfter / 60);
+    return ['success' => false, 'status' => 429, 'retry_after' => $retryAfter,
+        'message' => 'Too many sign-in attempts. Try again in ' . $minutes . ' minute' . ($minutes === 1 ? '' : 's') . '.'];
+}
+
+/** Login user; browser storage, cookies, and submitted proxy headers do not reset limits. */
 function loginUser($username, $password) {
-    $db = Database::getInstance()->getConnection();
-    
-    if (empty($username) || empty($password)) {
+    if (!is_string($username) || !is_string($password) || $username === '' || $password === '') {
         return ['success' => false, 'message' => 'Username and password required'];
     }
-    
-    // Serialize sign-in with key changes so an old-password login cannot finish afterward.
-    $db->begin_transaction();
-    $stmt = $db->prepare('SELECT id, username, password_hash, master_key_salt FROM users WHERE username = ? OR email = ? FOR UPDATE');
-    $stmt->bind_param('ss', $username, $username);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows === 0) {
-        $db->rollback();
-        return ['success' => false, 'message' => 'Invalid username or password'];
-    }
-    
-    $user = $result->fetch_assoc();
-    
-    if (!verifyPassword($password, $user['password_hash'])) {
-        $db->rollback();
-        return ['success' => false, 'message' => 'Invalid username or password'];
-    }
-    
-    // Create session
-    session_regenerate_id(true);
-    $sessionToken = generateSessionToken();
-    $expiresAt = date('Y-m-d H:i:s', time() + SESSION_LIFETIME);
-    
-    $stmt = $db->prepare('INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)');
-    $stmt->bind_param('iss', $user['id'], $sessionToken, $expiresAt);
-    
-    if ($stmt->execute()) {
+    $db = Database::getInstance()->getConnection();
+    $limit = max(1, (int)(defined('MAX_LOGIN_ATTEMPTS') ? MAX_LOGIN_ATTEMPTS : 5));
+    $ipLimit = max($limit, (int)(defined('LOGIN_IP_MAX_ATTEMPTS') ? LOGIN_IP_MAX_ATTEMPTS : 25));
+    $duration = max(1, (int)(defined('LOCKOUT_DURATION') ? LOCKOUT_DURATION : 900));
+    $address = $_SERVER['REMOTE_ADDR'] ?? '';
+    $source = is_string($address) && filter_var($address, FILTER_VALIDATE_IP) ? bin2hex(inet_pton($address)) : 'unknown';
+
+    try {
+        // Prune expired counters without a cron job; no passwords, names, or raw IPs are stored here.
+        $db->query('DELETE FROM login_throttles WHERE reset_at <= UNIX_TIMESTAMP() LIMIT 100');
+        $db->begin_transaction();
+        // ponytail: serialize guesses from one source; use an edge limiter if traffic outgrows shared hosting.
+        $ip = lockLoginCounter($db, 'source:' . $source, $duration);
+        if ((int)$ip['failures'] >= $ipLimit) {
+            $db->commit();
+            return loginCooldown(max(1, (int)$ip['reset_at'] - (int)$ip['now']));
+        }
+
+        // Resolve aliases with the database collation, then share a counter by immutable user ID.
+        $stmt = $db->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
+        $stmt->bind_param('ss', $username, $username);
+        $stmt->execute();
+        $identity = $stmt->get_result()->fetch_assoc();
+        $user = null;
+        if ($identity) {
+            // Keep the existing key-change lock: an old-password sign-in cannot finish after rotation.
+            $stmt = $db->prepare('SELECT id, username, password_hash, master_key_salt FROM users WHERE id = ? FOR UPDATE');
+            $stmt->bind_param('i', $identity['id']);
+            $stmt->execute();
+            $user = $stmt->get_result()->fetch_assoc();
+        }
+        $account = lockLoginCounter($db, $user ? 'account:' . $user['id'] : 'identifier:' . strtolower($username), $duration);
+        $now = (int)$account['now'];
+        if ((int)$account['failures'] >= $limit) {
+            $ipRetry = recordLoginFailure($db, $ip, $ipLimit, $duration, $now);
+            $db->commit();
+            return loginCooldown(max($ipRetry, (int)$account['reset_at'] - $now, 1));
+        }
+
+        // A public dummy bcrypt hash keeps unknown identifiers on the same password-check path.
+        $valid = verifyPassword($password, $user['password_hash'] ?? '$2y$12$FjCXAQaCYHAJ2l4MWHFLYOfPI8o2yymVzPEZAzL.RMxeAQQXN3PhK');
+        if (!$user || !$valid) {
+            $retryAfter = max(recordLoginFailure($db, $ip, $ipLimit, $duration, $now), recordLoginFailure($db, $account, $limit, $duration, $now));
+            $db->commit();
+            return $retryAfter ? loginCooldown($retryAfter) : ['success' => false, 'message' => 'Invalid username or password'];
+        }
+
+        // Successful sign-in resets this account, but cannot erase a source's password-spraying history.
+        $stmt = $db->prepare('DELETE FROM login_throttles WHERE bucket_hash = ?');
+        $stmt->bind_param('s', $account['bucket_hash']);
+        $stmt->execute();
+        session_regenerate_id(true);
+        $sessionToken = generateSessionToken();
+        $expiresAt = date('Y-m-d H:i:s', time() + SESSION_LIFETIME);
+        $stmt = $db->prepare('INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)');
+        $stmt->bind_param('iss', $user['id'], $sessionToken, $expiresAt);
+        $stmt->execute();
         $db->commit();
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['session_token'] = $sessionToken;
@@ -162,9 +222,10 @@ function loginUser($username, $password) {
         return ['success' => true, 'message' => 'Login successful', 'key_check' => [
             'salt' => $user['master_key_salt'], 'context' => $_SESSION['key_check_context'], 'user_id' => (int)$user['id']
         ]];
-    } else {
-        $db->rollback();
-        return ['success' => false, 'message' => 'Login failed'];
+    } catch (Throwable $e) {
+        try { $db->rollback(); } catch (Throwable $ignored) {}
+        error_log('Login protection unavailable (code ' . $e->getCode() . ')');
+        return ['success' => false, 'status' => 503, 'message' => 'Sign-in is temporarily unavailable. Please try again later.'];
     }
 }
 

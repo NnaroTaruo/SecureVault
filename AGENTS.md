@@ -104,6 +104,10 @@ SecureVault allows users to open their vault and decrypt passwords with **0 netw
 * **Maintenance Mode**:
   * Toggled via `define('MAINTENANCE_MODE', true/false)` in `config.php`.
   * Checked by `index.php`, `login.php`, `dashboard.php`, and `api/*.php` (returns HTTP 503).
+* **Login Throttling**:
+  * Existing installations must import `migrations/2026-10-27-login-throttles.sql` before uploading the login-rate-limit code. Fresh installations include `login_throttles` in `database.example.sql`.
+  * Keep its InnoDB row locks and account-ID alias binding. Defaults: 5 failures per account/identifier, 25 per server-reported `REMOTE_ADDR`, 900-second window/cooldown. Client-supplied proxy headers are not trusted.
+  * Missing/unavailable counters must fail closed (HTTP 503), never silently disable protection. Counter rows contain hashes, counts, and expiry times only; no credentials or plaintext identifiers.
 
 ---
 

@@ -27,8 +27,9 @@ define('SITE_URL', 'http://localhost/SecureVault/'); // Use your HTTPS URL in pr
 define('MAINTENANCE_MODE', false);
 
 // Security
-define('MAX_LOGIN_ATTEMPTS', 5);
-define('LOCKOUT_DURATION', 900); // 15 minutes
+define('MAX_LOGIN_ATTEMPTS', 5);       // Failed guesses per account or unknown identifier
+define('LOGIN_IP_MAX_ATTEMPTS', 25);   // Failed guesses across accounts from one REMOTE_ADDR
+define('LOCKOUT_DURATION', 900);       // 15-minute observation window and cooldown
 
 // Environment: 'development' or 'production'
 define('ENVIRONMENT', 'development');

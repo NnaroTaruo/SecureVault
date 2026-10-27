@@ -37,6 +37,8 @@ Requires **PHP 8+** with `mysqli` and `openssl`, **MySQL/MariaDB**, and **Apache
 
 For InfinityFree, import the schema into your hosting database and upload the app to the domain’s `htdocs` folder. Update `config.php` with the hosting database settings, your HTTPS `SITE_URL`, and `ENVIRONMENT` set to `'production'`. Keep credentials, SQL dumps, and logs private.
 
+**Updating an existing site:** before uploading the login-rate-limit update, import [this migration](migrations/2026-10-27-login-throttles.sql) in phpMyAdmin. It adds login counters and preserves your vault data.
+
 ## Security status
 
 This is an **experimental project**. Saved account passwords are encrypted in the browser, but authentication still sends the master password to PHP. The implementation does **not yet meet its intended zero-knowledge design**.
