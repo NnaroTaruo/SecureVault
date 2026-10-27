@@ -65,11 +65,15 @@ switch ($action) {
             jsonResponse(false, 'Invalid method', null, 400);
         }
         
+        if (!is_string($_POST['username'] ?? '') || !is_string($_POST['password'] ?? '')) {
+            jsonResponse(false, 'Invalid sign-in request', null, 400);
+        }
         $username = sanitize($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
         
         $result = loginUser($username, $password);
-        $statusCode = $result['success'] ? 200 : 401;
+        $statusCode = $result['success'] ? 200 : ($result['status'] ?? 401);
+        if ($statusCode === 429) header('Retry-After: ' . max(1, (int)$result['retry_after']));
         jsonResponse($result['success'], $result['message'], $result['key_check'] ?? null, $statusCode);
         break;
     

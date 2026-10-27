@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
+const http = require('node:http');
 const { spawn, spawnSync } = require('node:child_process');
 const { webcrypto } = require('node:crypto');
 const root = path.resolve(__dirname, '..');
@@ -65,7 +66,7 @@ function sql(statement, database = true) {
 async function request(endpoint, body, context = {}, server = 0, csrf = context.csrf) {
     const response = await fetch(origins[server] + '/' + endpoint, {
         method: body === undefined ? 'GET' : 'POST', redirect: 'manual',
-        headers: { ...(context.cookie ? { Cookie: context.cookie } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...(context.vaultContext ? {'X-Vault-Context':context.vaultContext} : {}) },
+        headers: { ...context.headers, ...(context.cookie ? { Cookie: context.cookie } : {}), ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...(context.vaultContext ? {'X-Vault-Context':context.vaultContext} : {}) },
         ...(body === undefined ? {} : { body: new URLSearchParams(body) }), signal: AbortSignal.timeout(15000)
     });
     const cookieJar = new Map((context.cookie || '').split('; ').filter(Boolean).map(value => [value.split('=')[0], value.slice(value.indexOf('=')+1)]));
@@ -74,7 +75,23 @@ async function request(endpoint, body, context = {}, server = 0, csrf = context.
         if (/max-age=0/i.test(header) || value === 'deleted') cookieJar.delete(name); else cookieJar.set(name,value);
     }
     const cookie = [...cookieJar].map(([name,value]) => name+'='+value).join('; ');
-    return { status: response.status, data: await response.json(), cookie };
+    return { status: response.status, data: await response.json(), cookie, retryAfter: response.headers.get('Retry-After') };
+}
+// Use real loopback source addresses to exercise the account limit across different IPs.
+function loginFromAddress(username, password, localAddress, server=0) {
+    return new Promise((resolve, reject) => {
+        const body = new URLSearchParams({username,password}).toString();
+        const req = http.request(origins[server] + '/api/auth.php?action=login', {method:'POST',localAddress,headers:{'Content-Type':'application/x-www-form-urlencoded','Content-Length':Buffer.byteLength(body)}}, response => {
+            let text = '';
+            response.setEncoding('utf8');
+            response.on('data', chunk => { text += chunk; });
+            response.on('end', () => { try { resolve({status:response.statusCode,data:JSON.parse(text),retryAfter:response.headers['retry-after']}); } catch (error) { reject(error); } });
+            response.on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(15000, () => req.destroy(new Error('Source-address login timed out')));
+        req.end(body);
+    });
 }
 async function signIn(username, password, server = 0) {
     const result = await request('api/auth.php?action=login', { username, password }, {}, server);
@@ -206,6 +223,100 @@ async function serverChecks() {
     for (const account of after.accounts) await decrypt(account.password_encrypted, await key(newPassword, after.salt));
     console.log('PASS: concurrent old-session writes and old-password sign-ins cannot cross a successful rotation.');
 }
+async function loginRateChecks() {
+    const context = await createUser('throttle-check', 1);
+    const snapshot = await vault(context);
+    const id = snapshot.user_id;
+    const accountHash = await webcrypto.subtle.digest('SHA-256', Buffer.from('account:' + id)).then(buffer=>Buffer.from(buffer).toString('hex'));
+    const counter = () => sql("SELECT failures,reset_at FROM login_throttles WHERE bucket_hash='"+accountHash+"'").trim().split('\t').map(Number);
+    const clear = () => sql('DELETE FROM login_throttles');
+    const wrong = (username=context.username, server=0, options={}) => request('api/auth.php?action=login', {username,password:'Wrong-sample-key!'}, options, server);
+    const valid = () => request('api/auth.php?action=login', {username:context.username,password:oldPassword});
+    const sessions = () => Number(sql('SELECT COUNT(*) FROM sessions WHERE user_id='+id).trim());
+
+    // Existing installations fail closed until the additive migration is imported.
+    sql('DROP TABLE login_throttles');
+    const before = sessions();
+    assert.equal((await valid()).status, 503);
+    assert.equal(sessions(), before);
+    const migration = fs.readFileSync(path.join(root,'migrations/2026-10-27-login-throttles.sql'),'utf8');
+    sql(migration); sql(migration);
+    assert.deepEqual((await vault(context)).accounts, snapshot.accounts, 'Migration must preserve the existing encrypted vault');
+    assert.equal((await vault(context)).salt, snapshot.salt);
+
+    for (const [index,alias] of [context.username,context.username+'@example.test',context.username.toUpperCase(),'throttlé-check'].entries()) {
+        assert.equal((await wrong(alias,index%3)).status,401, 'Username, email, case, and database-collation aliases must share failed attempts');
+    }
+    assert.equal(counter()[0],4);
+    const limited = await loginFromAddress(context.username+'@example.test','Wrong-sample-key!','127.0.0.2');
+    assert.equal(limited.status,429, 'Changing source addresses must not bypass the account limit');
+    assert.match(limited.data.message,/Too many sign-in attempts.*Try again/);
+    assert.equal(Object.hasOwn(limited.data,'data'),false,'A cooldown response must not include sign-in metadata');
+    assert(Number(limited.retryAfter)>0 && Number(limited.retryAfter)<=900);
+    const resetAt = counter()[1];
+    assert.equal((await loginFromAddress(context.username,oldPassword,'127.0.0.3')).status,429, 'Even a correct password must wait for the temporary account cooldown');
+    assert.equal((await wrong(context.username,1,{cookie:context.cookie})).status,429);
+    assert.equal((await wrong()).status,429, 'Clearing cookies must not reset server-side limits');
+    assert.equal(counter()[1],resetAt,'Blocked retries must not extend the account cooldown');
+    assert.equal(sessions(),before,'Throttled requests must not create authenticated sessions');
+    assert.equal((await vault(context)).accounts.length,1,'A cooldown must not revoke an existing session or offline copy');
+    await createUser('unaffected-throttle-check',0);
+    sql("UPDATE login_throttles SET reset_at=UNIX_TIMESTAMP()-1 WHERE bucket_hash='"+accountHash+"'");
+    assert.equal((await valid()).status,200,'Cooldown expiry must allow the correct password again');
+    assert.equal(sql("SELECT COUNT(*) FROM login_throttles WHERE bucket_hash='"+accountHash+"'").trim(),'0','Success must clear this account counter');
+
+    clear();
+    await wrong(); await wrong();
+    sql("UPDATE login_throttles SET reset_at=UNIX_TIMESTAMP()-1 WHERE bucket_hash='"+accountHash+"'");
+    assert.equal((await wrong()).status,401);
+    assert.equal(counter()[0],1,'Expired observation windows must start a new failed-attempt count');
+    assert.equal((await valid()).status,200);
+
+    // A mid-transaction counter failure must neither authenticate nor leave a partial count.
+    await wrong();
+    const countersBefore = sql('SELECT * FROM login_throttles ORDER BY bucket_hash');
+    const sessionsBefore = sessions();
+    sql("CREATE TRIGGER fail_login_count BEFORE UPDATE ON login_throttles FOR EACH ROW SET NEW.failures=IF(OLD.bucket_hash='"+accountHash+"',NULL,NEW.failures)");
+    assert.equal((await wrong()).status,503);
+    sql('DROP TRIGGER fail_login_count');
+    assert.equal(sessions(),sessionsBefore);
+    assert.equal(sql('SELECT * FROM login_throttles ORDER BY bucket_hash'),countersBefore,'Counter failures must roll back the entire login transaction');
+
+    clear();
+    const parallel = await Promise.all(Array.from({length:7},(_,index)=>loginFromAddress(context.username,'Wrong-sample-key!','127.0.0.'+(index+2),index%3)));
+    assert.deepEqual(parallel.map(result=>result.status).sort(),[401,401,401,401,429,429,429],'Concurrent requests must not pass more guesses than the threshold');
+    assert.equal(counter()[0],5);
+
+    clear();
+    const unknown=[];
+    for(let attempt=0;attempt<5;attempt++) unknown.push(await wrong('unknown-throttle-check'));
+    assert.deepEqual(unknown.map(result=>result.status),[401,401,401,401,429],'Unknown identifiers must get the same failure and cooldown responses');
+    assert.deepEqual(Object.keys(unknown[4].data).sort(),Object.keys(limited.data).sort());
+    assert.equal(unknown[4].data.message,limited.data.message);
+    const stored = sql('SELECT * FROM login_throttles');
+    for(const value of ['unknown-throttle-check','127.0.0.1','Wrong-sample-key!',oldPassword]) assert(!stored.includes(value),'Counters must not store raw identifiers, IPs, or passwords');
+
+    clear();
+    for(let attempt=0;attempt<22;attempt++) {
+        assert.equal((await wrong('spray-'+attempt,attempt%3,{headers:{'X-Forwarded-For':'198.51.100.'+(attempt+1),'X-Real-IP':'203.0.113.'+(attempt+1)}})).status,401);
+        if(attempt===11) assert.equal((await valid()).status,200,'A successful sign-in must not erase source-wide failed guesses');
+    }
+    const sprayed = await Promise.all(Array.from({length:3},(_,index)=>wrong('spray-last-'+index,index)));
+    assert.deepEqual(sprayed.map(result=>result.status).sort(),[401,401,429],'Concurrent requests with rotating identifiers must still hit the source-wide limit');
+    const size = sql('SELECT COUNT(*) FROM login_throttles').trim();
+    assert.equal((await valid()).status,429);
+    assert.equal((await wrong('another-unknown')).status,429);
+    assert.equal(sql('SELECT COUNT(*) FROM login_throttles').trim(),size,'A blocked source must not create unlimited identifier counters');
+    assert.equal((await loginFromAddress(context.username,oldPassword,'127.0.0.2')).status,200,'An unrelated source remains available when only this source is throttled');
+    sql('UPDATE login_throttles SET reset_at=UNIX_TIMESTAMP()-1');
+    assert.equal((await valid()).status,200,'Expired source counters must release the source cooldown');
+    assert.equal(sql('SELECT COUNT(*) FROM login_throttles').trim(),'1','Expired counters must be cleaned up during sign-in');
+    assert.equal((await request('api/auth.php?action=login', {'username[]':context.username,password:oldPassword})).status,400);
+    assert.equal((await request('api/auth.php?action=login', {username:context.username,'password[]':oldPassword})).status,400);
+    clear();
+    console.log('PASS: database migration preserves vaults; account aliases, new cookies and IPs cannot bypass cooldowns; concurrent guesses stay bounded; unknown identifiers get generic responses; spoofed proxy headers cannot bypass source limits; expiry and successful sign-in recover safely.');
+}
+
 async function browserPage(debugPort) {
     const target = await (await fetch('http://127.0.0.1:' + debugPort + '/json/new?about:blank', { method: 'PUT' })).json();
     const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -433,6 +544,16 @@ async function browserChecks() {
         const script = `document.getElementById('oldPassword').value=${JSON.stringify(previous)};document.getElementById('newPassword').value=${JSON.stringify(next)};document.getElementById('confirmNewPassword').value=${JSON.stringify(next)};window.testChange=handleSettingsSubmit({preventDefault(){}});`;
         await page.evaluate(script + (wait ? 'window.testChange' : '"started"'));
     };
+    for(let attempt=0;attempt<5;attempt++) await request('api/auth.php?action=login',{username:context.username,password:'Wrong-browser-login-key!'});
+    await page.navigate('/login.php');
+    await page.evaluate(`document.getElementById('login-username').value=${JSON.stringify(context.username)};document.getElementById('login-password').value=${JSON.stringify(oldPassword)};handleLoginSubmit({preventDefault(){},target:document.getElementById('loginFormElement')})`);
+    assert.equal(await page.evaluate('location.pathname'),'/login.php');
+    assert.match(await page.evaluate('document.getElementById("alertArea").textContent'),/Too many sign-in attempts.*Try again/);
+    assert.equal(await page.evaluate('document.getElementById("login-password").value'),'');
+    assert.equal(await page.evaluate('document.querySelector("#loginFormElement button[type=submit]").disabled'),false);
+    assert.equal(await page.evaluate('localStorage.getItem(VAULT_KEY_CHECK_STORAGE)'),null,'A blocked sign-in must not create a key check');
+    assert.equal(await page.evaluate('VaultDevice.active()'),null);
+    sql('UPDATE login_throttles SET reset_at=UNIX_TIMESTAMP()-1');
     await signInBrowser(oldPassword);
     await vaultActionChecks(page, signInBrowser, context);
     await page.evaluate('VaultDB.saveAll([], {rotation_pending:false})');
@@ -528,6 +649,7 @@ async function browserChecks() {
     try {
         await setup();
         await serverChecks();
+        await loginRateChecks();
         await browserChecks();
         console.log('PASS: safe master-password change integration checks completed.');
     } finally {
