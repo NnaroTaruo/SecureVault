@@ -30,8 +30,8 @@ function run(command, args, options = {}) {
     if (result.error || result.status !== 0) throw new Error('Test process failed: ' + path.basename(command) + '\n' + (result.error?.message || result.stderr || result.stdout));
     return result.stdout;
 }
-function background(command, args, cwd) {
-    const child = spawn(command, args, { cwd, windowsHide: true, stdio: 'ignore' });
+function background(command, args, cwd, stdio = 'ignore') {
+    const child = spawn(command, args, { cwd, windowsHide: true, stdio });
     child.on('error', error => { child.startError = error; });
     children.push(child);
     return child;
@@ -583,9 +583,28 @@ async function offlineIsolationChecks(page, signInBrowser, debugPort) {
 
 async function browserChecks() {
     const context = await createUser('browser-check');
-    const debugPort = await port();
-    background(chrome, ['--headless=new', '--disable-gpu', ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []), '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=' + debugPort, '--user-data-dir=' + path.join(temporary, 'chrome'), 'about:blank']);
-    await until(async () => (await fetch('http://127.0.0.1:' + debugPort + '/json/version')).ok, 'Isolated Chrome did not start');
+    const profile = path.join(temporary, 'chrome');
+    // Let Chrome reserve its own port; closing a temporary listener leaves a race.
+    const browser = background(chrome, ['--headless=new', '--disable-gpu', ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []), '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], undefined, ['ignore', 'ignore', 'pipe']);
+    let stderr = '';
+    browser.stderr.setEncoding('utf8');
+    browser.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8192); });
+    let debugPort;
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline && !browser.startError && browser.exitCode === null && browser.signalCode === null) {
+        try {
+            const candidate = Number(fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0]);
+            if (Number.isInteger(candidate) && candidate > 0 && candidate <= 65535
+                && (await fetch('http://127.0.0.1:' + candidate + '/json/version', {signal: AbortSignal.timeout(1000)})).ok) {
+                debugPort = candidate;
+                break;
+            }
+        } catch {}
+        await sleep(100);
+    }
+    assert(debugPort, 'Isolated Chrome did not start within 30 seconds. Exit: ' + browser.exitCode
+        + '; signal: ' + browser.signalCode + '; spawn error: ' + (browser.startError?.message || 'none')
+        + '\nChrome stderr:\n' + (stderr || '(no output)'));
     const page = await browserPage(debugPort);
     const signInBrowser = async (password, username = 'browser-check') => {
         await page.command('Network.clearBrowserCookies');
