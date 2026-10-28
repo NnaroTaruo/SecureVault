@@ -39,6 +39,8 @@ For InfinityFree, import the schema into your hosting database and upload the ap
 
 **Updating an existing site:** before uploading the login-rate-limit update, import [this migration](migrations/2026-10-27-login-throttles.sql) in phpMyAdmin. It adds login counters and preserves your vault data.
 
+For older MyISAM databases, follow the [InnoDB upgrade steps](migrations/transactional-vault-tables.md) to enable safe master-key changes.
+
 ## Security status
 
 This is an **experimental project**. Saved account passwords are encrypted in the browser, but authentication still sends the master password to PHP. The implementation does **not yet meet its intended zero-knowledge design**.

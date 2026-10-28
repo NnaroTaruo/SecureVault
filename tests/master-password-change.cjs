@@ -164,6 +164,60 @@ async function setup() {
     for (const value of ports) phpServers.push(background(php, ['-d', 'session.save_path=' + sessions, '-d', 'log_errors=1', '-d', 'error_log=' + path.join(temporary, 'php-errors.log'), '-S', '127.0.0.1:' + value, '-t', app], app));
     for (const origin of origins) await until(async () => (await fetch(origin + '/login.php')).status === 200, 'Isolated PHP server did not start');
 }
+async function transactionalMigrationChecks() {
+    const migration = fs.readFileSync(path.join(root, 'migrations/2026-10-28-transactional-vault-tables.sql'), 'utf8');
+    const reset = schema => sql('DROP DATABASE securevault_rotation_test; CREATE DATABASE securevault_rotation_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; USE securevault_rotation_test;\n' + schema, false);
+    reset(fs.readFileSync(path.join(root, 'tests/fixtures/legacy-myisam-schema.sql'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'migrations/2026-10-27-login-throttles.sql'), 'utf8'));
+    try {
+        const salt = 'Sample-existing-migration-salt';
+        const hash = run(php, ['-r', 'echo password_hash($argv[1], PASSWORD_BCRYPT, ["cost" => 12]);', oldPassword]);
+        const cryptoKey = await key(oldPassword, salt);
+        const ciphertexts = await Promise.all([encrypt('Saved example 0 🔐', cryptoKey), encrypt('Saved example 1 🔐', cryptoKey)]);
+        // Insert synthetic data directly: the legacy latin1 schema cannot store emoji category icons.
+        sql("INSERT INTO users (id,username,email,password_hash,master_key_salt) VALUES (1,'migration-check','migration@example.test','" + hash + "','" + salt + "'); INSERT INTO categories (id,user_id,name,icon) VALUES (1,1,_latin1 0x436166e9,NULL);" + ciphertexts.map((value, index) => "INSERT INTO accounts (user_id,category_id,service_name,username,password_encrypted,notes) VALUES (1,1,'Legacy sample " + index + "','sample','" + value + "'," + (index ? '_latin1 0x436166e9' : 'NULL') + ');').join('\n'));
+        const context = await signIn('migration-check', oldPassword);
+        const snapshot = await vault(context);
+        const updates = await replacements(snapshot);
+        const blocked = await rotate(context, updates);
+        assert.equal(blocked.status, 400);
+        assert.match(blocked.data.message, /transactional tables/);
+        const tables = ['users', 'categories', 'accounts', 'sessions', 'login_throttles'];
+        const rows = () => tables.map(table => {
+            const columns = sql('SHOW COLUMNS FROM ' + table).trim().split('\n').map(row => row.split('\t')[0]);
+            return sql('SELECT ' + columns.map(column => "IF(`" + column + "` IS NULL,'NULL',HEX(CAST(`" + column + '` AS BINARY)))').join(',') + ' FROM ' + table + ' ORDER BY `' + columns[0] + '`');
+        });
+        const structure = () => tables.map(table => [
+            sql('SHOW FULL COLUMNS FROM ' + table),
+            sql("SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,COALESCE(SUB_PART,0) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" + table + "' ORDER BY INDEX_NAME,SEQ_IN_INDEX"),
+            sql("SELECT TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" + table + "'")
+        ]);
+        const before = rows();
+        const definitions = structure();
+        for (let run = 0; run < 2; run++) {
+            sql(migration);
+            assert.equal(sql("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('users','categories','accounts','sessions') AND ENGINE='InnoDB'").trim(), '4');
+            assert.deepEqual(rows(), before, 'Every stored field, including salts, hashes, ciphertexts and NULLs, must be byte-identical after migration');
+            assert.deepEqual(structure(), definitions, 'Migration must preserve columns, indexes and character sets');
+        }
+        const migrated = await vault(context);
+        assert.equal(migrated.salt, salt);
+        for (const [index, account] of migrated.accounts.entries()) assert.equal(await decrypt(account.password_encrypted, cryptoKey), 'Saved example ' + index + ' 🔐');
+        sql('CREATE TRIGGER fail_migrated_rotation BEFORE UPDATE ON accounts FOR EACH ROW SET NEW.password_encrypted=IF(OLD.id=' + snapshot.accounts[1].id + ',NULL,NEW.password_encrypted)');
+        assert.equal((await rotate(context, updates)).status, 500);
+        sql('DROP TRIGGER fail_migrated_rotation');
+        assert.deepEqual(rows(), before, 'A failed rotation on migrated tables must roll back passwords, hashes and sessions together');
+        assert.equal((await rotate(context, updates)).status, 200);
+        assert.equal((await request('api/auth.php?action=login', {username:'migration-check', password:oldPassword})).status, 401);
+        const after = await vault(await signIn('migration-check', newPassword));
+        assert.equal(after.salt, salt);
+        assert.equal(after.accounts.length, ciphertexts.length);
+        for (const [index, account] of after.accounts.entries()) assert.equal(await decrypt(account.password_encrypted, await key(newPassword, salt)), 'Saved example ' + index + ' 🔐');
+        console.log('PASS: legacy MyISAM migration preserves every stored byte and table definition; re-running is safe; migrated vaults decrypt, roll back failed rotations, and change master keys successfully.');
+    } finally {
+        reset(fs.readFileSync(path.join(root, 'database.example.sql'), 'utf8'));
+    }
+    sql(migration); // Fresh InnoDB installations also retain their foreign-key definitions.
+}
 async function serverChecks() {
     const context = await createUser('server-check');
     const snapshot = await vault(context);
@@ -648,6 +702,7 @@ async function browserChecks() {
 (async () => {
     try {
         await setup();
+        await transactionalMigrationChecks();
         await serverChecks();
         await loginRateChecks();
         await browserChecks();

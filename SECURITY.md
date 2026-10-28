@@ -6,6 +6,7 @@ Saved account passwords use browser-side AES-256-GCM with PBKDF2/SHA-256 (100,00
 
 - Authentication still sends the master password to PHP, so the app is not fully zero-knowledge.
 - Master-key changes require an online connection, working browser storage, and Web Locks support. The complete current vault is re-encrypted in the browser and saved with the sign-in hash in one InnoDB transaction. Missing or stale entries are rejected, and all sessions are signed out afterward.
+- Legacy MyISAM installations must complete the [transactional-table upgrade](migrations/transactional-vault-tables.md) first. Master-key changes fail closed while `users`, `accounts`, or `sessions` is nontransactional. The upgrade also converts `categories`, preserving existing columns, character sets, salts, hashes, and ciphertexts.
 - Existing offline copies on other devices do not update until those devices sign in online again. Interrupted or unconfirmed changes block this browser's stale offline copy until an online sign-in and sync.
 - Service names, usernames, URLs, notes, and categories are not encrypted.
 - This browser keeps one offline vault copy, bound to its account and sign-in. Switching accounts replaces it and closes older tabs. Explicit **Sign out** removes the encrypted copy, metadata, and local key check; the inactivity lock retains the encrypted copy for offline access. Cached dashboard HTML contains no personal fields or session tokens.
