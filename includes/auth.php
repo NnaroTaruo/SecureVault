@@ -1,119 +1,106 @@
 <?php
 /**
- * Authentication Functions
+ * Authentication, Session Verification, Login Throttling & Master Key Rotation
  */
 
-require_once 'config.php';
-require_once 'db.php';
-require_once 'functions.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/functions.php';
 
 session_start();
 
 /**
- * Check if user is logged in
+ * Check if a session exists in PHP.
  */
 function isLoggedIn() {
     return isset($_SESSION['user_id']) && isset($_SESSION['session_token']);
 }
 
 /**
- * Get current user ID
+ * Return the authenticated user ID, or null.
  */
 function getCurrentUserId() {
     return isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
 }
 
 /**
- * Get current user details
+ * Return public profile fields for the authenticated user.
  */
 function getCurrentUser() {
     if (!isLoggedIn()) {
         return null;
     }
-    
+
     $db = Database::getInstance()->getConnection();
     $userId = getCurrentUserId();
-    
+
     $stmt = $db->prepare('SELECT id, username, email, created_at FROM users WHERE id = ?');
     $stmt->bind_param('i', $userId);
     $stmt->execute();
-    $result = $stmt->get_result();
-    
-    return $result->fetch_assoc();
+
+    return $stmt->get_result()->fetch_assoc();
 }
 
 /**
- * Register new user
+ * Register a new user and seed default categories.
  */
 function registerUser($username, $email, $password, $confirmPassword) {
     $db = Database::getInstance()->getConnection();
-    
     $errors = [];
-    
-    // Validation
+
     if (empty($username) || strlen($username) < 3) {
         $errors[] = 'Username must be at least 3 characters';
     }
-    
     if (!isValidEmail($email)) {
         $errors[] = 'Invalid email address';
     }
-    
     if ($password !== $confirmPassword) {
         $errors[] = 'Passwords do not match';
     }
-    
     if (!validatePasswordStrength($password)) {
         $errors[] = 'Password must contain uppercase, lowercase, numbers, and special characters';
     }
-    
     if ($errors) {
         return ['success' => false, 'errors' => $errors];
     }
-    
-    // Check if username or email exists
+
     $stmt = $db->prepare('SELECT id FROM users WHERE username = ? OR email = ?');
     $stmt->bind_param('ss', $username, $email);
     $stmt->execute();
-    
+
     if ($stmt->get_result()->num_rows > 0) {
         return ['success' => false, 'errors' => ['Username or email already exists']];
     }
-    
-    // Create user
+
     $passwordHash = hashPassword($password);
     $masterKeySalt = createPasswordSalt();
-    
+
     $stmt = $db->prepare('INSERT INTO users (username, email, password_hash, master_key_salt) VALUES (?, ?, ?, ?)');
     $stmt->bind_param('ssss', $username, $email, $passwordHash, $masterKeySalt);
-    
+
     if ($stmt->execute()) {
         $userId = $db->insert_id;
-        
-        // Create default categories
-        $categories = ['Gaming', 'University', 'Financial', 'Social Media'];
+
+        $categories = [
+            'Gaming' => '🎮',
+            'University' => '🎓',
+            'Financial' => '💰',
+            'Social Media' => '📱',
+        ];
         $categoryStmt = $db->prepare('INSERT INTO categories (user_id, name, icon) VALUES (?, ?, ?)');
-        
-        foreach ($categories as $catName) {
-            $icon = match($catName) {
-                'Gaming' => '🎮',
-                'University' => '🎓',
-                'Financial' => '💰',
-                'Social Media' => '📱',
-                default => '📁'
-            };
+        foreach ($categories as $catName => $icon) {
             $categoryStmt->bind_param('iss', $userId, $catName, $icon);
             $categoryStmt->execute();
         }
-        
+
         return ['success' => true, 'message' => 'Registration successful. Please log in.'];
-    } else {
-        return ['success' => false, 'errors' => ['Registration failed']];
     }
+
+    return ['success' => false, 'errors' => ['Registration failed']];
 }
 
 /**
- * Lock a persistent counter before checking credentials. Must run in a transaction.
+ * Lock a persistent login counter row before checking credentials. Must run in a transaction.
  */
 function lockLoginCounter($db, $bucket, $duration) {
     $hash = hash('sha256', $bucket);
@@ -144,11 +131,17 @@ function recordLoginFailure($db, $counter, $limit, $duration, $now) {
 
 function loginCooldown($retryAfter) {
     $minutes = (int)ceil($retryAfter / 60);
-    return ['success' => false, 'status' => 429, 'retry_after' => $retryAfter,
-        'message' => 'Too many sign-in attempts. Try again in ' . $minutes . ' minute' . ($minutes === 1 ? '' : 's') . '.'];
+    return [
+        'success' => false,
+        'status' => 429,
+        'retry_after' => $retryAfter,
+        'message' => 'Too many sign-in attempts. Try again in ' . $minutes . ' minute' . ($minutes === 1 ? '' : 's') . '.'
+    ];
 }
 
-/** Login user; browser storage, cookies, and submitted proxy headers do not reset limits. */
+/**
+ * Login user; browser storage, cookies, and submitted proxy headers do not reset limits.
+ */
 function loginUser($username, $password) {
     if (!is_string($username) || !is_string($password) || $username === '' || $password === '') {
         return ['success' => false, 'message' => 'Username and password required'];
@@ -211,17 +204,29 @@ function loginUser($username, $password) {
         $stmt->bind_param('iss', $user['id'], $sessionToken, $expiresAt);
         $stmt->execute();
         $db->commit();
+
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['session_token'] = $sessionToken;
         $_SESSION['username'] = $user['username'];
         $_SESSION['master_key_salt'] = $user['master_key_salt'];
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         $_SESSION['key_check_context'] = bin2hex(random_bytes(16));
-        setcookie('sv_signed_out', '', ['expires' => 1, 'path' => parse_url(SITE_URL, PHP_URL_PATH) ?: '/', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'samesite' => 'Strict']);
-        
-        return ['success' => true, 'message' => 'Login successful', 'key_check' => [
-            'salt' => $user['master_key_salt'], 'context' => $_SESSION['key_check_context'], 'user_id' => (int)$user['id']
-        ]];
+        setcookie('sv_signed_out', '', [
+            'expires' => 1,
+            'path' => parse_url(SITE_URL, PHP_URL_PATH) ?: '/',
+            'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+            'samesite' => 'Strict'
+        ]);
+
+        return [
+            'success' => true,
+            'message' => 'Login successful',
+            'key_check' => [
+                'salt' => $user['master_key_salt'],
+                'context' => $_SESSION['key_check_context'],
+                'user_id' => (int)$user['id']
+            ]
+        ];
     } catch (Throwable $e) {
         try { $db->rollback(); } catch (Throwable $ignored) {}
         error_log('Login protection unavailable (code ' . $e->getCode() . ')');
@@ -230,24 +235,24 @@ function loginUser($username, $password) {
 }
 
 /**
- * Logout user
+ * Destroy the current server session.
  */
 function logoutUser() {
     $db = Database::getInstance()->getConnection();
-    
+
     if (isLoggedIn()) {
         $sessionToken = $_SESSION['session_token'];
         $stmt = $db->prepare('DELETE FROM sessions WHERE session_token = ?');
         $stmt->bind_param('s', $sessionToken);
         $stmt->execute();
     }
-    
+
     session_destroy();
     return true;
 }
 
 /**
- * Verify session is valid
+ * Verify that the current PHP session exists in DB, is unexpired, and was not revoked offline.
  */
 function verifySession() {
     if (!isLoggedIn()) {
@@ -258,25 +263,25 @@ function verifySession() {
         logoutUser();
         return false;
     }
-    
+
     $db = Database::getInstance()->getConnection();
     $sessionToken = $_SESSION['session_token'];
     $userId = getCurrentUserId();
-    
+
     $stmt = $db->prepare('SELECT id FROM sessions WHERE session_token = ? AND user_id = ? AND expires_at > NOW()');
     $stmt->bind_param('si', $sessionToken, $userId);
     $stmt->execute();
-    
+
     if ($stmt->get_result()->num_rows === 0) {
         logoutUser();
         return false;
     }
-    
+
     return true;
 }
 
 /**
- * Require login
+ * Redirect unauthenticated visitors to the login page.
  */
 function requireLogin() {
     if (!isLoggedIn() || !verifySession()) {
@@ -286,7 +291,7 @@ function requireLogin() {
 }
 
 /**
- * Update master password
+ * Atomically rotate the master password hash and every re-encrypted vault entry.
  */
 function updateMasterPassword($userId, $oldPassword, $newPassword, $accounts = null) {
     $db = Database::getInstance()->getConnection();

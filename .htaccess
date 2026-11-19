@@ -7,8 +7,9 @@
     RewriteEngine On
     RewriteBase /
 
-    # Keep repository internals private, including files without extensions.
+    # Keep repository internals and backend PHP includes private.
     RewriteRule (^|/)\.git(/|$) - [F,L,NC]
+    RewriteRule ^includes(/|$) - [F,L,NC]
 
     # Force HTTPS in production (exclude localhost & 127.0.0.1 for local dev)
     RewriteCond %{HTTP_HOST} !^localhost [NC]

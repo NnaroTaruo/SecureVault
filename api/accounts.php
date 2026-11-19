@@ -7,9 +7,9 @@
 ob_start();
 header('Cache-Control: no-store');
 
-require_once '../config.php';
-require_once '../auth.php';
-require_once '../accounts.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/accounts.php';
 
 if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
     ob_end_clean();

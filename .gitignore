@@ -9,8 +9,9 @@ config.php
 # Database blueprint - keep off GitHub
 database.sql
 
-# Deployment artifacts
+# Deployment artifacts & local generated output
 deploy.zip
+output/
 
 # XAMPP / Server logs & debug outputs
 *.log

@@ -47,26 +47,33 @@ Before writing any code, stop at the first rung that holds:
 
 ```
 SecureVault/
-├── index.php                 # Official Product Landing Page, Features & Live WebCrypto Sandbox
+├── index.php                 # Official Product Landing Page, Walkthrough & Privacy Documents
 ├── login.php                 # Master Gateway (Sign In & Account Registration with Strength Meter)
 ├── dashboard.php             # Main Vault App (Account list, modals, offline status, categories)
-├── auth.php                  # Authentication session verification & master key verification
-├── accounts.php              # Vault database logic & helpers
-├── functions.php             # Core utility & cryptographic helper functions
-├── db.php                    # MySQLi singleton database connection
+├── maintenance.php           # HTTP 503 Maintenance Page
 ├── config.php                # Environment config (DB credentials, SITE_URL, MAINTENANCE_MODE) [GIT IGNORED]
 ├── config.example.php        # Blueprint for local/production configuration
-├── database.sql              # Database schema & default categories [GIT IGNORED]
-├── service-worker.js         # PWA Service Worker (scoped cache v14: neutral offline shell)
+├── database.example.sql      # InnoDB schema blueprint
+├── database.sql              # Local database dump [GIT IGNORED]
+├── service-worker.js         # PWA Service Worker (scoped cache v17: neutral offline shell)
 ├── manifest.json             # PWA Web App Manifest
+├── includes/                 # Backend PHP modules (blocked from direct HTTP access via .htaccess)
+│   ├── auth.php              # Session verification, throttled login & transactional key rotation
+│   ├── accounts.php          # Vault account & category database queries
+│   ├── functions.php         # Core utility & bcrypt/validation helpers
+│   └── db.php                # MySQLi singleton database connection
 ├── api/
 │   ├── accounts.php          # REST/AJAX endpoints (sync_vault, get_account, reveal, add, update, delete)
 │   └── auth.php              # Auth endpoints (login, register, update_master_password, logout)
+├── assets/                   # Logos, PWA icons & media (logo.svg, icon-192.png, icon-512.png, ronan.jpg)
 ├── css/style.css             # Custom utility animations and scrollbar rules
 └── js/
-    ├── dashboard.js          # Account-bound sync, CRUD AJAX, UI logic
     ├── vault-storage.js      # Account/sign-in-bound IndexedDB, device reset and logout
     ├── vault-crypto.js       # Shared WebCrypto and local master-key checks
+    ├── vault-ui.js           # Alerts, modals, search, clipboard, and vault card rendering
+    ├── vault-generator.js    # Cryptographic password generator (unbiased rejection sampling)
+    ├── vault-lock.js         # 5-minute inactivity auto-lock & privacy blur engine
+    ├── dashboard.js          # Account-bound sync, CRUD AJAX, reveal, key rotation & boot
     └── pwa.js                # Service Worker registration & PWA installation prompts
 ```
 
@@ -80,7 +87,7 @@ SecureVault allows users to open their vault and decrypt passwords with **0 netw
    * Upon opening `dashboard.php`, `syncVaultFromNetwork()` fetches `api/accounts.php?action=sync_vault`.
    * The encrypted payload, salt, and unencrypted metadata are saved to IndexedDB (`SecureVaultDB-v2:<app-path>` → `vault_items` and `vault_meta`), bound to the account ID and random sign-in context. Account requests carry `X-Vault-Context` so stale tabs cannot fetch a newly signed-in account's data.
 2. **Offline Fallback (When Disconnected / Airplane Mode)**:
-   * `service-worker.js` (scoped cache `v14`) serves only `dashboard.php?offline_shell=1`, a deliberately neutral shell without personal fields or session tokens. Authenticated pages and API responses are never cached.
+   * `service-worker.js` (scoped cache `v17`) serves only `dashboard.php?offline_shell=1`, a deliberately neutral shell without personal fields or session tokens. Authenticated pages and API responses are never cached.
    * `js/dashboard.js` detects offline state and displays the `🟡 Offline Mode` header pill.
    * Both online and offline cards are rendered from the account-bound snapshot. All IndexedDB reads and writes check the current owner; delayed requests from old tabs cannot replace the new copy.
 3. **Offline Decryption**:

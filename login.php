@@ -3,8 +3,8 @@
  * SecureVault - Login / Register Gateway (PWA Edition)
  */
 
-require_once 'config.php';
-require_once 'auth.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/auth.php';
 
 if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
     require_once __DIR__ . '/maintenance.php';
@@ -147,7 +147,7 @@ $showRegister = isset($_GET['register']);
             <!-- Logo + Title Header -->
             <div class="text-center mb-6">
                 <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-primary/15 border border-primary/35 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-primary/20">
-                    <img src="logo.svg" alt="SecureVault Logo" class="w-8 h-8 sm:w-9 sm:h-9">
+                    <img src="assets/logo.svg" alt="SecureVault Logo" class="w-8 h-8 sm:w-9 sm:h-9">
                 </div>
                 <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
                     Secure<span class="text-primary">Vault</span>
@@ -555,7 +555,7 @@ $showRegister = isset($_GET['register']);
     <div id="installBanner" class="hidden fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-sm z-50 transition-all">
         <div class="bg-dark-card/95 backdrop-blur-xl border border-primary/30 rounded-2xl p-4 shadow-2xl shadow-primary/10 flex items-center gap-3.5">
             <div class="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-                <img src="logo.svg" alt="App Icon" class="w-6 h-6">
+                <img src="assets/logo.svg" alt="App Icon" class="w-6 h-6">
             </div>
             <div class="flex-1 min-w-0">
                 <h3 class="font-bold text-white text-xs truncate">Install SecureVault</h3>

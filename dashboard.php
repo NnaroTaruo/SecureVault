@@ -1,6 +1,6 @@
 <?php
 /** SecureVault dashboard: personal data is loaded only by the account-bound client. */
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
     require_once __DIR__ . '/maintenance.php';
     exit;
@@ -10,7 +10,7 @@ if ($offlineShell) {
     header('X-SecureVault-Offline-Shell: 1');
     header('Cache-Control: public, max-age=0');
 } else {
-    require_once 'auth.php';
+    require_once __DIR__ . '/includes/auth.php';
     requireLogin();
     header('Cache-Control: no-store');
 }
@@ -171,18 +171,6 @@ $userId = $offlineShell ? null : getCurrentUserId();
             All
         </a>
     </div>
-</div>
-
-<!-- ===== PWA INSTALL BANNER ===== -->
-<div id="installBanner"
-     class="hidden fixed top-[118px] left-4 right-4 z-20 bg-dark-card border border-primary/30
-            rounded-xl px-4 py-3 flex items-center gap-3 shadow-lg md:ml-64">
-    <div class="flex-1">
-        <p class="text-xs font-semibold">Install SecureVault</p>
-        <p class="text-xs text-gray-400">Add to home screen for app experience</p>
-    </div>
-    <button onclick="installApp()" class="px-3 py-1.5 bg-primary text-dark-bg text-xs font-bold rounded-lg">Install</button>
-    <button onclick="dismissInstallBanner()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
 </div>
 
 <!-- ===== SEARCH OVERLAY ===== -->
@@ -730,9 +718,6 @@ $userId = $offlineShell ? null : getCurrentUserId();
     </div>
 </div>
 
-<!-- Alert Box -->
-<div id="alertBox" class="fixed top-4 right-4 z-50 max-w-xs w-full pointer-events-none"></div>
-
 <!-- Master Key Modal -->
 <div id="masterKeyModal"
      class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm
@@ -829,7 +814,7 @@ $userId = $offlineShell ? null : getCurrentUserId();
                 <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-[#00C65E] to-[#080E1A] opacity-75 group-hover:opacity-100 blur transition-opacity duration-500" style="animation: rotateLighting 3s linear infinite;"></div>
                 <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-[#00C65E] to-[#080E1A]" style="animation: rotateLighting 3s linear infinite;"></div>
                 <!-- Profile Image -->
-                <img src="ronan.jpg" alt="Ronan - Founder and Developer" class="relative w-28 h-28 rounded-full object-cover border-2 border-dark-card shadow-2xl transition-transform duration-500 group-hover:scale-105">
+                <img src="assets/ronan.jpg" alt="Ronan - Founder and Developer" class="relative w-28 h-28 rounded-full object-cover border-2 border-dark-card shadow-2xl transition-transform duration-500 group-hover:scale-105">
             </div>
             
             <h3 class="text-2xl font-black text-white tracking-tight mb-1">Ronan</h3>
@@ -851,7 +836,10 @@ $userId = $offlineShell ? null : getCurrentUserId();
 
 <script src="js/vault-storage.js?v=1"></script>
 <script src="js/vault-crypto.js?v=1"></script>
-<script src="js/dashboard.js?v=12"></script>
+<script src="js/vault-ui.js?v=1"></script>
+<script src="js/vault-generator.js?v=1"></script>
+<script src="js/vault-lock.js?v=1"></script>
+<script src="js/dashboard.js?v=13"></script>
 <script src="js/pwa.js"></script>
 
 <!-- PWA Install Banner (Premium) -->

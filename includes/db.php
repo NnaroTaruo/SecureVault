@@ -1,7 +1,9 @@
 <?php
 /**
- * Database Connection Class
+ * Database Connection Singleton (MySQLi)
  */
+
+require_once __DIR__ . '/../config.php';
 
 class Database {
     private $connection;

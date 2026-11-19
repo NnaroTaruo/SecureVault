@@ -3,8 +3,8 @@
  * SecureVault — Product Landing Page
  */
 
-require_once 'config.php';
-require_once 'auth.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/includes/auth.php';
 
 if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE) {
     require_once __DIR__ . '/maintenance.php';
@@ -26,8 +26,8 @@ $userLoggedIn = isLoggedIn() && verifySession();
     <meta name="description" content="Keep your passwords in one place. Save your logins, find them quickly, and access your saved vault offline.">
     <title>SecureVault — Your passwords, in one place</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="logo.svg" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -310,7 +310,7 @@ $userLoggedIn = isLoggedIn() && verifySession();
     <header class="site-header">
         <div class="container header-inner">
             <a class="brand" href="index.php" aria-label="SecureVault home">
-                <img src="logo.svg" alt="" width="34" height="34">
+                <img src="assets/logo.svg" alt="" width="34" height="34">
                 <div>Secure<span>Vault</span></div>
             </a>
             <nav class="header-links" aria-label="Main navigation">

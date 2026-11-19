@@ -8,9 +8,10 @@ if (PHP_SAPI !== 'cli') {
 $directory = sys_get_temp_dir() . '/securevault-auth-check-' . bin2hex(random_bytes(8));
 mkdir($directory);
 mkdir($directory . '/api');
+mkdir($directory . '/includes');
 copy(__DIR__ . '/../api/auth.php', $directory . '/api/auth.php');
 file_put_contents($directory . '/config.php', '<?php');
-file_put_contents($directory . '/auth.php', <<<'PHP'
+file_put_contents($directory . '/includes/auth.php', <<<'PHP'
 <?php
 $_SESSION = ['csrf_token' => 'dummy-csrf-check'];
 function sanitize($value) { return trim($value); }
@@ -52,11 +53,12 @@ try {
     }
     echo "PASS: login, registration, and password-change requests return JSON without creating a debug log.\n";
 } finally {
-    foreach (['api/debug.txt', 'api/auth.php', 'auth.php', 'config.php'] as $file) {
+    foreach (['api/debug.txt', 'api/auth.php', 'includes/auth.php', 'config.php'] as $file) {
         if (is_file($directory . '/' . $file)) {
             unlink($directory . '/' . $file);
         }
     }
     rmdir($directory . '/api');
+    rmdir($directory . '/includes');
     rmdir($directory);
 }

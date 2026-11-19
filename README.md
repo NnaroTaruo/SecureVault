@@ -1,4 +1,4 @@
-# <img src="logo.svg" width="40" height="40" alt=""> SecureVault
+# <img src="assets/logo.svg" width="40" height="40" alt=""> SecureVault
 
 A personal password manager built with PHP, MySQL, and browser-based encryption. Save your logins, organize them by category, and access previously synced passwords offline.
 

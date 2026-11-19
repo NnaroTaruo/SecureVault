@@ -54,25 +54,16 @@ jobs:
           # Copy only public runtime files; never stage config.php, SQL dumps, migrations, or tests.
           cp -p \
             .htaccess \
-            accounts.php \
-            auth.php \
             dashboard.php \
-            db.php \
-            functions.php \
-            icon-192.png \
-            icon-512.png \
             index.php \
             LICENSE \
             login.php \
-            logo.svg \
             maintenance.php \
             manifest.json \
-            ronan.jpg \
-            securevault-infographic.png \
             service-worker.js \
             "$STAGE_DIR/"
 
-          cp -rp api assets css js "$STAGE_DIR/"
+          cp -rp api assets css includes js "$STAGE_DIR/"
 
           # Guardrail: fail immediately if any sensitive file ever entered staging.
           if [ -e "$STAGE_DIR/config.php" ] || compgen -G "$STAGE_DIR/*.sql" > /dev/null; then

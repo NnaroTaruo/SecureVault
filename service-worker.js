@@ -1,8 +1,8 @@
 const APP_URL = new URL('./', self.registration.scope);
 const CACHE_PREFIX = 'securevault:' + encodeURIComponent(APP_URL.pathname) + ':';
-const CACHE_NAME = CACHE_PREFIX + 'v16';
+const CACHE_NAME = CACHE_PREFIX + 'v17';
 const OFFLINE_URL = new URL('dashboard.php?offline_shell=1', APP_URL).href;
-const PUBLIC_ASSETS = ['','index.php','manifest.json','logo.svg','icon-192.png','icon-512.png','css/style.css','js/vault-storage.js?v=1','js/vault-crypto.js?v=1','js/dashboard.js?v=12','js/pwa.js'];
+const PUBLIC_ASSETS = ['','index.php','manifest.json','assets/logo.svg','assets/icon-192.png','assets/icon-512.png','assets/ronan.jpg','css/style.css','js/vault-storage.js?v=1','js/vault-crypto.js?v=1','js/vault-ui.js?v=1','js/vault-generator.js?v=1','js/vault-lock.js?v=1','js/dashboard.js?v=13','js/pwa.js'];
 const publicUrls = new Set(PUBLIC_ASSETS.map(path => new URL(path, APP_URL).href));
 
 self.addEventListener('install', event => {

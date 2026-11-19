@@ -1,118 +1,23 @@
 // ==============================================================================
-// SecureVault - Dashboard & Zero-Knowledge Offline Cryptography Engine
+// SecureVault — Vault Sync, CRUD Actions, Reveal, Key Rotation & Boot
 // ==============================================================================
 
-const colors = {
-    success: 'bg-green-900/40 border-green-500 text-green-300',
-    error:   'bg-red-900/40 border-red-500 text-red-300',
-    warning: 'bg-yellow-900/40 border-yellow-500 text-yellow-300',
-    info:    'bg-blue-900/40 border-blue-500 text-blue-300'
-};
-
-const iconColors = ['#FF6B6B','#FF8E53','#FFC300','#2ECC71','#00E676','#3498DB','#9B59B6','#E91E63','#FF5722','#00BCD4'];
-
-function showAlert(message, type = 'info') {
-    const alertBox = document.getElementById('alertArea');
-    if (!alertBox) return;
-
-    const el = document.createElement('div');
-    el.setAttribute('role', 'alert');
-    el.className = `p-3.5 rounded-xl border-l-4 text-xs font-semibold flex items-center gap-2 ${colors[type] || colors.info}`;
-    el.style.cssText += 'animation: slideDown .25s ease-out;';
-
-    const messageEl = document.createElement('span');
-    messageEl.className = 'flex-1';
-    messageEl.textContent = message;
-
-    const closeButton = document.createElement('button');
-    closeButton.type = 'button';
-    closeButton.className = 'flex-shrink-0 opacity-60 hover:opacity-100 text-lg leading-none';
-    closeButton.innerHTML = '&times;';
-    closeButton.addEventListener('click', () => el.remove());
-
-    el.append(messageEl, closeButton);
-    alertBox.appendChild(el);
-    setTimeout(() => el.remove(), 4500);
-}
-
-// ── 2. Browser cryptography is shared with sign-in in vault-crypto.js. ─────────
-
-// ── 3. Vault Synchronization & Offline Mode ─────────────────
 let masterPasswordChangeInProgress = false;
 let accountSaveInProgress = false;
+let activeMasterKeyAction = null;
+let activeMasterKeyAccountId = null;
+let activeMasterKeyButton = null;
+const revealTimers = {};
+
 const VAULT_OWNER = Object.freeze(USER_ID ? { userId: USER_ID, context: KEY_CHECK_CONTEXT } : VaultDevice.active());
 VaultDB.owner = VAULT_OWNER;
 const EMPTY_VAULT_HTML = document.getElementById('mainContent').innerHTML;
 
-function vaultHeaders(extra = {}) { return { ...extra, 'X-Vault-Context': VAULT_OWNER?.context || '' }; }
-
-function discardVaultView(message = 'This sign-in ended or changed. Sign in online to open your vault.') {
-    isVaultLocked = true;
-    Object.keys(revealTimers).forEach(id => { clearTimeout(revealTimers[id]); delete revealTimers[id]; });
-    document.querySelectorAll('form').forEach(form => form.reset());
-    document.getElementById('category').replaceChildren(new Option('Select Category', ''));
-    currentGeneratedPassword = '';
-    activeMasterKeyAction = activeMasterKeyAccountId = activeMasterKeyButton = null;
-    document.querySelectorAll('[data-vault-profile]').forEach(el => { el.textContent = ''; });
-    document.getElementById('categoryChips').replaceChildren();
-    document.getElementById('sidebarCategories').replaceChildren();
-    const main = document.getElementById('mainContent');
-    main.replaceChildren();
-    const text = document.createElement('p');
-    text.className = 'text-sm text-gray-300 py-6';
-    text.textContent = message;
-    const link = document.createElement('a');
-    link.href = 'login.php'; link.textContent = 'Sign in'; link.className = 'text-primary underline';
-    main.append(text, link);
-    document.getElementById('activeCountText').textContent = 'VAULT CLOSED';
-    document.querySelectorAll('[id$="Modal"], #searchOverlay').forEach(el => el.classList.add('hidden'));
-    document.getElementById('vaultLockOverlay').classList.add('hidden');
-    document.body.classList.remove('vault-blurred');
-    document.body.style.overflow = 'auto';
+function vaultHeaders(extra = {}) {
+    return { ...extra, 'X-Vault-Context': VAULT_OWNER?.context || '' };
 }
 
-function renderVaultSnapshot(accounts, categories, user = {}) {
-    if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
-    const selected = Number(new URLSearchParams(location.search).get('category')) || 0;
-    const visible = selected ? accounts.filter(account => Number(account.category_id) === selected) : accounts;
-    if (visible.length) renderOfflineVaultCards(visible);
-    else document.getElementById('mainContent').innerHTML = EMPTY_VAULT_HTML;
-    document.getElementById('activeCountText').textContent = `${accounts.length} SECURE ASSET${accounts.length !== 1 ? 's' : ''}`;
-    document.querySelectorAll('[data-vault-profile]').forEach(el => {
-        const field = el.dataset.vaultProfile;
-        el.textContent = field === 'initial' ? (user.username || 'V').charAt(0).toUpperCase() : (user[field] || (field === 'username' ? 'Vault' : ''));
-    });
-    const select = document.getElementById('category');
-    const previous = select.value;
-    select.replaceChildren(new Option('Select Category', ''));
-    for (const category of categories) select.add(new Option(category.name, category.id));
-    select.value = previous;
-    for (const id of ['categoryChips', 'sidebarCategories']) {
-        const container = document.getElementById(id);
-        container.replaceChildren();
-        for (const category of [{ id: 0, name: 'All Vaults' }, ...categories]) {
-            const link = document.createElement('a');
-            link.href = 'dashboard.php' + (category.id ? '?category=' + category.id : '');
-            link.textContent = (category.icon ? category.icon + ' ' : '') + (id === 'categoryChips' && !category.id ? 'All' : category.name);
-            link.className = (id === 'categoryChips' ? 'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ' : 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ') +
-                (Number(category.id) === selected ? (id === 'categoryChips' ? 'bg-primary text-dark-bg' : 'bg-primary/10 text-primary') : 'bg-dark-card text-gray-400 hover:text-white');
-            if (id === 'sidebarCategories') {
-                const count = document.createElement('span');
-                count.className = 'ml-auto text-xs bg-dark-border/80 px-2 py-0.5 rounded-full text-gray-500';
-                count.textContent = String(category.id ? accounts.filter(account => Number(account.category_id) === Number(category.id)).length : accounts.length);
-                link.appendChild(count);
-            }
-            container.appendChild(link);
-        }
-    }
-}
-
-function updateStatusPill(isOnline) {
-    const pill = document.getElementById('offlineStatusPill');
-    if (pill) {
-        pill.classList.toggle('hidden', isOnline);
-    }
-}
+// ── 1. Vault Synchronization & Offline Fallback ─────────────
 
 async function syncVaultFromNetwork() {
     if (masterPasswordChangeInProgress || isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return false;
@@ -133,8 +38,11 @@ async function syncVaultFromNetwork() {
             if (response.ok && data.success && Array.isArray(data.data?.accounts) && data.data.salt &&
                 data.data.user_id === VAULT_OWNER.userId && data.data.context === VAULT_OWNER.context) {
                 if (!await VaultDB.saveAll(data.data.accounts, {
-                    salt: data.data.salt, categories: data.data.categories || [], user: data.data.user || {},
-                    synced_at: data.data.synced_at || new Date().toISOString(), rotation_pending: false
+                    salt: data.data.salt,
+                    categories: data.data.categories || [],
+                    user: data.data.user || {},
+                    synced_at: data.data.synced_at || new Date().toISOString(),
+                    rotation_pending: false
                 })) throw new Error('Offline storage is unavailable');
                 updateStatusPill(true);
                 renderVaultSnapshot(data.data.accounts, data.data.categories || [], data.data.user);
@@ -153,368 +61,18 @@ async function syncVaultFromNetwork() {
 
 async function checkRenderOfflineVault() {
     if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
-    try { renderVaultSnapshot(await VaultDB.getAll(), await VaultDB.getMeta('categories') || [], await VaultDB.getMeta('user') || {}); }
-    catch { discardVaultView(); }
-}
-
-function renderOfflineVaultCards(items) {
-    if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
-    const main = document.getElementById('mainContent');
-    if (!main) return;
-
-    let grid = document.getElementById('accountsList');
-    if (!grid) {
-        main.innerHTML = `<div id="accountsList" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>`;
-        grid = document.getElementById('accountsList');
-    }
-
-    grid.innerHTML = '';
-    items.forEach((account, index) => {
-        const acc = { ...account, id: Number(account.id) };
-        if (!Number.isSafeInteger(acc.id) || acc.id < 1) return;
-        const letter = (acc.service_name || 'A').charAt(0).toUpperCase();
-        const iconColor = iconColors[letter.charCodeAt(0) % iconColors.length];
-
-        const card = document.createElement('div');
-        card.className = 'bg-dark-card border border-dark-border rounded-2xl p-4 card-anim hover:border-primary/30 transition-all';
-        card.style.animationDelay = `${Math.min(index * 0.05, 0.4)}s`;
-        card.dataset.accountId = acc.id;
-        card.dataset.service = (acc.service_name || '').toLowerCase();
-
-        card.innerHTML = `
-            <div class="flex items-center gap-3 mb-3">
-                <div class="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0"
-                     style="background:${iconColor}18; border:1.5px solid ${iconColor}44;">
-                    <span style="color:${iconColor};">${escapeHtml(letter)}</span>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h3 class="font-bold text-sm truncate">${escapeHtml(acc.service_name)}</h3>
-                    <div class="cursor-pointer group flex items-center gap-1 mt-0.5 w-max max-w-full"
-                         data-copy-username
-                         title="Tap to copy username">
-                        <span class="text-xs text-gray-400 group-hover:text-white transition-colors truncate account-username">
-                            ${escapeHtml(acc.username)}
-                        </span>
-                        <span class="text-xs opacity-50 group-hover:opacity-100 transition-opacity">📋</span>
-                    </div>
-                </div>
-                <div class="flex gap-0.5 flex-shrink-0">
-                    <button onclick="editAccount(${acc.id})"
-                            class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-white/5 hover:text-white transition-all text-sm">✏️</button>
-                    <button onclick="deleteAccount(${acc.id})"
-                            class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition-all text-sm">🗑️</button>
-                </div>
-            </div>
-            <div class="flex items-center gap-2 mb-3 px-3 py-2.5 bg-dark-bg/70 rounded-xl border border-dark-border/60">
-                <span class="flex-1 pw-dots text-gray-500 tracking-widest password-masked password-display-${acc.id}">
-                    ••••••••••••
-                </span>
-                <button onclick="togglePasswordVisibility(this)"
-                        class="text-gray-500 hover:text-primary transition-colors flex-shrink-0 p-0.5" aria-label="Show password">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="flex gap-2">
-                <button data-copy-username
-                        class="tap-active flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-dark-bg/70 border border-dark-border/60 text-gray-300 hover:border-primary/40 hover:text-white text-xs font-semibold transition-all">
-                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                    Copy User
-                </button>
-                <button onclick="triggerReveal(${acc.id}, this)"
-                        class="tap-active flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 text-xs font-bold transition-all">
-                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-                    Pass
-                </button>
-            </div>
-            ${acc.website_url ? `
-                <div class="mt-2.5 pt-2.5 border-t border-dark-border/40">
-                    <a href="${escapeHtml(acc.website_url.startsWith('http') ? acc.website_url : 'https://' + acc.website_url)}" target="_blank" rel="noopener noreferrer"
-                       class="text-[11px] text-gray-500 hover:text-primary flex items-center gap-1 truncate transition-colors">
-                        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                        ${escapeHtml(acc.website_url)}
-                    </a>
-                </div>
-            ` : ''}
-        `;
-        card.querySelectorAll('[data-copy-username]').forEach(button => button.addEventListener('click', () => copyUserClipboard(acc.username)));
-        grid.appendChild(card);
-    });
-
-    const activeCountText = document.getElementById('activeCountText');
-    if (activeCountText) {
-        activeCountText.textContent = `${items.length} SECURE ASSET${items.length !== 1 ? 's' : ''} (LOCAL CACHE)`;
+    try {
+        renderVaultSnapshot(
+            await VaultDB.getAll(),
+            await VaultDB.getMeta('categories') || [],
+            await VaultDB.getMeta('user') || {}
+        );
+    } catch {
+        discardVaultView();
     }
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>"']/g, m => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    })[m]);
-}
-
-// ── 4. Search Logic ───────────────────────────────────────
-function searchVault(query) {
-    const q = query.toLowerCase().trim();
-    const cards = document.querySelectorAll('#accountsList [data-account-id]');
-    let visibleCount = 0;
-
-    cards.forEach(card => {
-        const service = card.dataset.service || '';
-        const usernameEl = card.querySelector('.account-username');
-        const username = usernameEl ? usernameEl.textContent.toLowerCase() : '';
-
-        if (service.includes(q) || username.includes(q)) {
-            card.classList.remove('hidden');
-            visibleCount++;
-        } else {
-            card.classList.add('hidden');
-        }
-    });
-
-    const emptyMsg = document.getElementById('searchEmptyState');
-    if (emptyMsg) {
-        emptyMsg.classList.toggle('hidden', visibleCount > 0 || q === '');
-    }
-}
-
-function showSearchOverlay() {
-    const overlay = document.getElementById('searchOverlay');
-    if (overlay) {
-        overlay.classList.remove('hidden');
-        setTimeout(() => {
-            const input = document.getElementById('searchInput');
-            if (input) input.focus();
-        }, 100);
-    }
-}
-
-function hideSearchOverlay() {
-    const overlay = document.getElementById('searchOverlay');
-    if (overlay) overlay.classList.add('hidden');
-}
-
-// ── 5. Add / Edit Account & Password Generator ────────────
-let currentGeneratedPassword = '';
-
-function generateSecureRandomPassword(length = 18, options = {}) {
-    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-    const numbers   = '0123456789';
-    const symbols   = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-
-    const useUpper   = options.upper !== false;
-    const useNumbers = options.numbers !== false;
-    const useSymbols = options.symbols !== false;
-
-    let charPool = lowercase;
-    const guaranteedChars = [];
-
-    // Helper for secure random integer within range [0, max)
-    const getSecureRandomInt = (max) => {
-        const array = new Uint32Array(1);
-        window.crypto.getRandomValues(array);
-        return array[0] % max;
-    };
-
-    guaranteedChars.push(lowercase[getSecureRandomInt(lowercase.length)]);
-
-    if (useUpper) {
-        charPool += uppercase;
-        guaranteedChars.push(uppercase[getSecureRandomInt(uppercase.length)]);
-    }
-    if (useNumbers) {
-        charPool += numbers;
-        guaranteedChars.push(numbers[getSecureRandomInt(numbers.length)]);
-    }
-    if (useSymbols) {
-        charPool += symbols;
-        guaranteedChars.push(symbols[getSecureRandomInt(symbols.length)]);
-    }
-
-    const passwordArr = [...guaranteedChars];
-    const remainingLength = Math.max(0, length - guaranteedChars.length);
-
-    for (let i = 0; i < remainingLength; i++) {
-        passwordArr.push(charPool[getSecureRandomInt(charPool.length)]);
-    }
-
-    // Cryptographic Fisher-Yates shuffle
-    for (let i = passwordArr.length - 1; i > 0; i--) {
-        const j = getSecureRandomInt(i + 1);
-        const temp = passwordArr[i];
-        passwordArr[i] = passwordArr[j];
-        passwordArr[j] = temp;
-    }
-
-    return passwordArr.join('');
-}
-
-function togglePasswordGenerator() {
-    const panel = document.getElementById('passwordGeneratorPanel');
-    const toggleBtn = document.getElementById('toggleGenBtn');
-    if (!panel) return;
-
-    const isHidden = panel.classList.contains('hidden');
-    if (isHidden) {
-        panel.classList.remove('hidden');
-        if (toggleBtn) {
-            toggleBtn.classList.add('bg-primary', 'text-dark-bg');
-            toggleBtn.classList.remove('text-primary', 'bg-primary/10');
-        }
-        if (!currentGeneratedPassword) {
-            generateNewPassword();
-        }
-    } else {
-        panel.classList.add('hidden');
-        if (toggleBtn) {
-            toggleBtn.classList.remove('bg-primary', 'text-dark-bg');
-            toggleBtn.classList.add('text-primary', 'bg-primary/10');
-        }
-    }
-}
-
-function generateNewPassword() {
-    const lengthInput  = document.getElementById('genLength');
-    const upperInput   = document.getElementById('genUpper');
-    const numbersInput = document.getElementById('genNumbers');
-    const symbolsInput = document.getElementById('genSymbols');
-    const displayEl    = document.getElementById('generatedPasswordDisplay');
-    const strengthBadge= document.getElementById('genStrengthBadge');
-
-    const length = lengthInput ? parseInt(lengthInput.value, 10) : 18;
-    const options = {
-        upper: upperInput ? upperInput.checked : true,
-        numbers: numbersInput ? numbersInput.checked : true,
-        symbols: symbolsInput ? symbolsInput.checked : true
-    };
-
-    currentGeneratedPassword = generateSecureRandomPassword(length, options);
-    if (displayEl) {
-        displayEl.textContent = currentGeneratedPassword;
-    }
-
-    if (strengthBadge) {
-        let score = 0;
-        if (length >= 12) score++;
-        if (length >= 18) score++;
-        if (options.upper) score++;
-        if (options.numbers) score++;
-        if (options.symbols) score++;
-
-        if (score >= 4) {
-            strengthBadge.textContent = 'Very Strong';
-            strengthBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-        } else if (score >= 3) {
-            strengthBadge.textContent = 'Strong';
-            strengthBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30';
-        } else {
-            strengthBadge.textContent = 'Moderate';
-            strengthBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30';
-        }
-    }
-}
-
-function applyGeneratedPassword() {
-    if (!currentGeneratedPassword) generateNewPassword();
-    const pwInput = document.getElementById('accountPassword');
-    if (!pwInput) return;
-
-    pwInput.value = currentGeneratedPassword;
-    pwInput.classList.add('border-primary', 'ring-2', 'ring-primary/40');
-    setTimeout(() => {
-        pwInput.classList.remove('ring-2', 'ring-primary/40');
-    }, 1200);
-
-    showAlert('Generated password applied to field!', 'success');
-}
-
-function copyGeneratedPassword() {
-    if (!currentGeneratedPassword) generateNewPassword();
-    if (!currentGeneratedPassword) return;
-
-    if (!navigator.clipboard) {
-        const ta = document.createElement('textarea');
-        ta.value = currentGeneratedPassword;
-        ta.style.position = 'fixed';
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-            document.execCommand('copy');
-            showAlert('Generated password copied to clipboard!', 'success');
-        } catch {
-            showAlert('Copy failed', 'error');
-        }
-        document.body.removeChild(ta);
-        return;
-    }
-    navigator.clipboard.writeText(currentGeneratedPassword)
-        .then(() => showAlert('Generated password copied to clipboard!', 'success'))
-        .catch(() => showAlert('Copy failed', 'error'));
-}
-
-function toggleModalPasswordVisibility(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-
-    const isPassword = input.type === 'password';
-    input.type = isPassword ? 'text' : 'password';
-
-    if (btn) {
-        btn.innerHTML = isPassword ? `
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/>
-            </svg>
-        ` : `
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7
-                         -1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-            </svg>
-        `;
-    }
-}
-
-function openAddAccountModal() {
-    document.getElementById('accountId').value = '';
-    document.getElementById('accountForm').reset();
-    const pwInput = document.getElementById('accountPassword');
-    if (pwInput) {
-        pwInput.value = '';
-        pwInput.type = 'password';
-    }
-    document.getElementById('modalTitle').textContent = 'Add New Account';
-
-    // Reset generator panel
-    const panel = document.getElementById('passwordGeneratorPanel');
-    if (panel) panel.classList.add('hidden');
-    const toggleBtn = document.getElementById('toggleGenBtn');
-    if (toggleBtn) {
-        toggleBtn.classList.remove('bg-primary', 'text-dark-bg');
-        toggleBtn.classList.add('text-primary', 'bg-primary/10');
-    }
-    currentGeneratedPassword = '';
-
-    openModal('accountModal');
-}
-
-function openSettingsModal() {
-    if (masterPasswordChangeInProgress) return;
-    document.getElementById('settingsForm').reset();
-    document.getElementById('keyChangeStatus').textContent = '';
-    document.getElementById('keyChangeRecovery').classList.add('hidden');
-    openModal('settingsModal');
-}
-
-function editAccount(accountId) {
-    promptMasterKey('edit', accountId, null);
-}
+// ── 2. Key Verification Helpers ─────────────────────────────
 
 async function getEffectiveSalt() {
     if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return null;
@@ -540,6 +98,12 @@ async function verifyVaultActionKey(password) {
     }
 }
 
+// ── 3. Add / Edit / Delete Account Actions ──────────────────
+
+function editAccount(accountId) {
+    promptMasterKey('edit', accountId, null);
+}
+
 async function executeEditFetch(accountId, masterPassword) {
     if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
     let acc = null;
@@ -554,9 +118,7 @@ async function executeEditFetch(accountId, masterPassword) {
                 body: new URLSearchParams({ action: 'get_account' })
             });
             const data = await r.json();
-            if (data.success && data.data) {
-                acc = data.data.account;
-            }
+            if (data.success && data.data) acc = data.data.account;
         } catch (e) {
             console.warn('Online fetch failed, falling back to local DB:', e);
         }
@@ -565,7 +127,6 @@ async function executeEditFetch(accountId, masterPassword) {
     if (!acc) {
         try { acc = await VaultDB.getItem(accountId); } catch { return; }
     }
-
     if (!acc) {
         showAlert('Account not found in local or remote vault', 'error');
         return;
@@ -584,7 +145,7 @@ async function executeEditFetch(accountId, masterPassword) {
     document.getElementById('serviceName').value      = acc.service_name;
     document.getElementById('category').value         = acc.category_id || 0;
     document.getElementById('accountUsername').value  = acc.username;
-    
+
     const pwInput = document.getElementById('accountPassword');
     if (pwInput) {
         pwInput.value = decryptedPassword;
@@ -596,16 +157,13 @@ async function executeEditFetch(accountId, masterPassword) {
     document.getElementById('masterPassword').value   = masterPassword;
     document.getElementById('modalTitle').textContent = 'Edit Account';
 
-    // Reset generator panel on edit modal
-    const panel = document.getElementById('passwordGeneratorPanel');
-    if (panel) panel.classList.add('hidden');
+    document.getElementById('passwordGeneratorPanel')?.classList.add('hidden');
     const toggleBtn = document.getElementById('toggleGenBtn');
     if (toggleBtn) {
         toggleBtn.classList.remove('bg-primary', 'text-dark-bg');
         toggleBtn.classList.add('text-primary', 'bg-primary/10');
     }
     currentGeneratedPassword = '';
-
     openModal('accountModal');
 }
 
@@ -617,21 +175,21 @@ async function handleAccountSubmit(event) {
         return;
     }
 
-    const accountId    = document.getElementById('accountId').value;
-    const serviceName  = document.getElementById('serviceName').value.trim();
-    const categoryId   = document.getElementById('category').value;
-    const username     = document.getElementById('accountUsername').value.trim();
-    const password     = document.getElementById('accountPassword').value;
-    const website      = document.getElementById('website').value.trim();
-    const notes        = document.getElementById('notes').value.trim();
-    const masterPass   = document.getElementById('masterPassword').value;
+    const accountId   = document.getElementById('accountId').value;
+    const serviceName = document.getElementById('serviceName').value.trim();
+    const categoryId  = document.getElementById('category').value;
+    const username    = document.getElementById('accountUsername').value.trim();
+    const password    = document.getElementById('accountPassword').value;
+    const website     = document.getElementById('website').value.trim();
+    const notes       = document.getElementById('notes').value.trim();
+    const masterPass  = document.getElementById('masterPassword').value;
 
     if (!masterPass) { showAlert('Master Key is required', 'error'); return; }
 
     const isEdit   = !!accountId;
     const endpoint = isEdit ? 'api/accounts.php?action=update' : 'api/accounts.php?action=add_account';
-    const form = document.getElementById('accountForm');
-    const button = form.querySelector('button[type=submit]');
+    const form     = document.getElementById('accountForm');
+    const button   = form.querySelector('button[type=submit]');
     accountSaveInProgress = true;
     button.disabled = true;
     form.setAttribute('aria-busy', 'true');
@@ -643,28 +201,28 @@ async function handleAccountSubmit(event) {
         if (isVaultLocked || masterPasswordChangeInProgress || !VaultDevice.matches(VAULT_OWNER)) return;
 
         const body = new URLSearchParams({
-            service_name:  serviceName,
-            category_id:   categoryId,
-            username:      username,
+            service_name: serviceName,
+            category_id: categoryId,
+            username: username,
             encrypted_password: encryptedPassword,
-            website_url:   website,
-            notes:         notes
+            website_url: website,
+            notes: notes
         });
         if (isEdit) body.append('id', accountId);
 
         const response = await fetch(endpoint, { method: 'POST', headers: vaultHeaders({ 'X-CSRF-Token': CSRF_TOKEN }), body });
         const data = await response.json();
         if (!VaultDevice.matches(VAULT_OWNER) || isVaultLocked) return;
+
         if (data.success) {
             showAlert(isEdit ? 'Account updated!' : 'Account added!', 'success');
             closeModal('accountModal');
-            // Refresh local cache and UI
             await syncVaultFromNetwork();
             setTimeout(() => { if (VaultDevice.matches(VAULT_OWNER) && !isVaultLocked) location.reload(); }, 800);
         } else {
             showAlert(data.message || 'Failed to save account', 'error');
         }
-    } catch (e) {
+    } catch {
         showAlert('Encryption or network error', 'error');
     } finally {
         accountSaveInProgress = false;
@@ -673,10 +231,44 @@ async function handleAccountSubmit(event) {
     }
 }
 
-// ── 6. Master Key Prompt Modal Logic ──────────────────────
-let activeMasterKeyAction    = null;
-let activeMasterKeyAccountId = null;
-let activeMasterKeyButton    = null;
+function deleteAccount(accountId) {
+    promptMasterKey('delete', accountId, null);
+}
+
+async function executeDeleteAccount(accountId, masterPassword) {
+    if (!navigator.onLine) {
+        showAlert('Cannot delete accounts in offline mode. Please reconnect.', 'warning');
+        return false;
+    }
+
+    try {
+        if (!await verifyVaultActionKey(masterPassword)) return false;
+        const response = await fetch('api/accounts.php?action=delete_account', {
+            method: 'POST',
+            headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN }),
+            body: new URLSearchParams({ action: 'delete_account', id: accountId })
+        });
+        const data = await response.json();
+        if (data.success) {
+            await VaultDB.deleteItem(accountId);
+            showAlert('Account deleted', 'success');
+            const card = document.querySelector(`[data-account-id="${accountId}"]`);
+            if (card) {
+                card.style.transition = 'opacity .3s, transform .3s';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => { card.remove(); updateVaultCount(); }, 320);
+            }
+            return true;
+        }
+        showAlert(data.message || 'Deletion failed', 'error');
+    } catch {
+        showAlert('Network error while deleting', 'error');
+    }
+    return false;
+}
+
+// ── 4. Master Key Prompt & Password Reveal ──────────────────
 
 function promptMasterKey(action, accountId, btn) {
     activeMasterKeyAction    = action;
@@ -721,21 +313,19 @@ async function handleMasterKeySubmit(e) {
                 document.getElementById('promptMasterKey').value = '';
                 document.getElementById('promptMasterKey').focus();
             }
-        } finally { button.disabled = false; }
+        } finally {
+            button.disabled = false;
+        }
         return;
     }
 
     closeModal('masterKeyModal');
-
     if (activeMasterKeyAction === 'reveal') {
         executeRevealPassword(activeMasterKeyAccountId, activeMasterKeyButton, masterPassword);
     } else if (activeMasterKeyAction === 'edit') {
         executeEditFetch(activeMasterKeyAccountId, masterPassword);
     }
 }
-
-// ── 7. Password Reveal + Offline Decryption ────────────────
-const revealTimers = {};
 
 async function executeRevealPassword(accountId, btn, masterPassword) {
     if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
@@ -752,7 +342,6 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
     const salt = await getEffectiveSalt();
     if (salt === null) return;
 
-    // 1. Try fetching live from server
     if (navigator.onLine) {
         try {
             const r = await fetch('api/accounts.php?action=reveal', {
@@ -761,15 +350,12 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
                 body: new URLSearchParams({ action: 'reveal', id: accountId })
             });
             const data = await r.json();
-            if (data.success && data.data) {
-                encryptedPassword = data.data.password_encrypted;
-            }
+            if (data.success && data.data) encryptedPassword = data.data.password_encrypted;
         } catch (e) {
             console.warn('Online reveal failed, reading from local DB:', e);
         }
     }
 
-    // 2. Fallback to local IndexedDB
     if (!encryptedPassword) {
         let localItem;
         try { localItem = await VaultDB.getItem(accountId); } catch { return; }
@@ -801,12 +387,10 @@ async function executeRevealPassword(accountId, btn, masterPassword) {
         displayEl.style.fontSize = '13px';
 
         if (revealTimers[accountId]) clearTimeout(revealTimers[accountId]);
-        revealTimers[accountId] = setTimeout(() => {
-            hidePasswordElement(accountId, displayEl);
-        }, 30000);
+        revealTimers[accountId] = setTimeout(() => hidePasswordElement(accountId, displayEl), 30000);
 
         showAlert(isOfflineDecrypted ? 'Password decrypted offline 🔒 (Auto-hides in 30s)' : 'Password revealed (Auto-hides in 30s)', 'success');
-    } catch (err) {
+    } catch {
         showAlert('Decryption failed. Verify master key.', 'error');
     }
 }
@@ -828,95 +412,27 @@ function hidePasswordElement(accountId, displayEl) {
 }
 
 function togglePasswordVisibility(btn) {
-    const card = btn.closest('[data-account-id]');
-    const accountId = card?.dataset.accountId;
-    if (!accountId) return;
-    promptMasterKey('reveal', accountId, btn);
+    const accountId = btn.closest('[data-account-id]')?.dataset.accountId;
+    if (accountId) promptMasterKey('reveal', accountId, btn);
 }
 
 function triggerReveal(accountId, btn) {
     promptMasterKey('reveal', accountId, btn);
 }
 
-// ── 8. Delete Account ─────────────────────────────────────
-function deleteAccount(accountId) {
-    promptMasterKey('delete', accountId, null);
-}
-
-async function executeDeleteAccount(accountId, masterPassword) {
-    if (!navigator.onLine) {
-        showAlert('Cannot delete accounts in offline mode. Please reconnect.', 'warning');
-        return false;
-    }
-
-    try {
-        if (!await verifyVaultActionKey(masterPassword)) return false;
-        const response = await fetch('api/accounts.php?action=delete_account', {
-            method: 'POST',
-            headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN }),
-            body: new URLSearchParams({ action: 'delete_account', id: accountId })
-        });
-        const data = await response.json();
-        if (data.success) {
-            await VaultDB.deleteItem(accountId);
-            showAlert('Account deleted', 'success');
-            const card = document.querySelector(`[data-account-id="${accountId}"]`);
-            if (card) {
-                card.style.transition = 'opacity .3s, transform .3s';
-                card.style.opacity = '0';
-                card.style.transform = 'scale(0.95)';
-                setTimeout(() => { card.remove(); updateVaultCount(); }, 320);
-            }
-            return true;
-        } else {
-            showAlert(data.message || 'Deletion failed', 'error');
-        }
-    } catch (e) {
-        showAlert('Network error while deleting', 'error');
-    }
-    return false;
-}
-
-function updateVaultCount() {
-    const remaining = document.querySelectorAll('#accountsList [data-account-id]').length;
-    const activeCountText = document.getElementById('activeCountText');
-    if (activeCountText) {
-        activeCountText.textContent = `${remaining} SECURE ASSET${remaining !== 1 ? 's' : ''} ACTIVE`;
-    }
-    if (remaining === 0) location.reload();
-}
-
-// ── 9. Modals & UI Helpers ────────────────────────────────
-function openModal(id) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    }
-}
-
-function closeModal(id) {
-    if (id === 'settingsModal' && masterPasswordChangeInProgress) return;
-    if (id === 'settingsModal') document.getElementById('settingsForm').reset();
-    if (id === 'masterKeyModal') document.getElementById('promptMasterKey').value = '';
-    if (id === 'accountModal') {
-        document.getElementById('masterPassword').value = '';
-        document.getElementById('accountPassword').value = '';
-    }
-    const el = document.getElementById(id);
-    if (el) {
-        el.classList.add('hidden');
-        document.body.style.overflow = 'auto';
-    }
-}
+// ── 5. Logout & Transactional Master Key Rotation ───────────
 
 async function executeLogout() {
     if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return false; }
     const cleanup = VaultDevice.end(VAULT_OWNER);
     discardVaultView('Signing out and removing this device’s vault copy…');
     // Offline logout remains effective: the local revocation cookie blocks the old session on reconnect.
-    const request = fetch('api/auth.php?action=logout', { method: 'POST', cache: 'no-store', keepalive: true,
-        headers: { 'X-CSRF-Token': CSRF_TOKEN }, signal: AbortSignal.timeout(10000) }).catch(() => {});
+    const request = fetch('api/auth.php?action=logout', {
+        method: 'POST', cache: 'no-store', keepalive: true,
+        headers: { 'X-CSRF-Token': CSRF_TOKEN },
+        signal: AbortSignal.timeout(10000)
+    }).catch(() => {});
+
     try {
         await cleanup;
         await request;
@@ -928,35 +444,6 @@ async function executeLogout() {
     }
 }
 
-function logout() {
-    openModal('logoutModal');
-}
-
-function switchTab(tab) {
-    if (tab === 'vault') window.location.href = 'dashboard.php';
-    else if (tab === 'search') showSearchOverlay();
-    else if (tab === 'add') openAddAccountModal();
-    else if (tab === 'settings') openSettingsModal();
-}
-
-function copyUserClipboard(text) {
-    if (isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
-    if (!navigator.clipboard) {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); showAlert('Username copied to clipboard!', 'success'); }
-        catch { showAlert('Copy failed', 'error'); }
-        document.body.removeChild(ta);
-        return;
-    }
-    navigator.clipboard.writeText(text)
-        .then(() => showAlert('Username copied to clipboard!', 'success'))
-        .catch(() => showAlert('Copy failed', 'error'));
-}
-
 async function handleSettingsSubmit(event) {
     event.preventDefault();
     if (masterPasswordChangeInProgress || isVaultLocked || !VaultDevice.matches(VAULT_OWNER)) return;
@@ -966,27 +453,24 @@ async function handleSettingsSubmit(event) {
     if (newKey !== confirmKey) { showAlert('New master keys do not match', 'error'); return; }
     if (oldKey === newKey) { showAlert('Choose a different master key', 'error'); return; }
     if (new TextEncoder().encode(newKey).length > 72) { showAlert('Your new master key is too long. Try a shorter phrase.', 'error'); return; }
-    if (!navigator.onLine) {
-        showAlert('Cannot update master password while offline.', 'warning');
-        return;
-    }
-    if (!navigator.locks) {
-        showAlert('Please use an updated browser to change your master key safely.', 'warning');
-        return;
-    }
-    const form = document.getElementById('settingsForm');
-    const status = document.getElementById('keyChangeStatus');
+    if (!navigator.onLine) { showAlert('Cannot update master password while offline.', 'warning'); return; }
+    if (!navigator.locks) { showAlert('Please use an updated browser to change your master key safely.', 'warning'); return; }
+
+    const form     = document.getElementById('settingsForm');
+    const status   = document.getElementById('keyChangeStatus');
     const recovery = document.getElementById('keyChangeRecovery');
-    const button = document.getElementById('settingsSubmitBtn');
+    const button   = document.getElementById('settingsSubmitBtn');
     const controls = document.querySelectorAll('#settingsModal button, #settingsForm input');
     let requestStarted = false;
     let changed = false;
+
     masterPasswordChangeInProgress = true;
     controls.forEach(control => { control.disabled = true; });
     form.setAttribute('aria-busy', 'true');
     button.textContent = 'Updating saved passwords…';
     status.textContent = 'Updating your saved passwords. Keep this page open.';
     recovery.classList.add('hidden');
+
     try {
         await navigator.locks.request(VAULT_CACHE_LOCK, async () => {
             // Never rotate from a possibly incomplete or stale IndexedDB copy.
@@ -998,7 +482,10 @@ async function handleSettingsSubmit(event) {
                 throw new Error('Could not load your current vault. Sign in online and try again.');
             }
             const vault = snapshot.data;
-            if (!VaultDevice.matches(VAULT_OWNER) || vault.user_id !== VAULT_OWNER.userId || vault.context !== VAULT_OWNER.context) throw new Error('Your sign-in changed. Nothing was changed.');
+            if (!VaultDevice.matches(VAULT_OWNER) || vault.user_id !== VAULT_OWNER.userId || vault.context !== VAULT_OWNER.context) {
+                throw new Error('Your sign-in changed. Nothing was changed.');
+            }
+
             const oldCryptoKey = await deriveKey(oldKey, vault.salt);
             const newCryptoKey = await deriveKey(newKey, vault.salt);
             const updatedAccounts = [];
@@ -1014,6 +501,7 @@ async function handleSettingsSubmit(event) {
                     password_encrypted: newEncrypted
                 });
             }
+
             const meta = { salt: vault.salt, categories: vault.categories || [], synced_at: vault.synced_at };
             // Persist a barrier before sending: a lost response must not leave a usable stale offline copy.
             try {
@@ -1021,17 +509,19 @@ async function handleSettingsSubmit(event) {
             } catch {
                 throw new Error('Could not prepare offline storage. Nothing was changed. Enable browser storage and try again.');
             }
+
             requestStarted = true;
             const response = await fetch('api/auth.php?action=update_master_password', {
                 method: 'POST', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000),
                 headers: vaultHeaders({ 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF_TOKEN }),
                 body: new URLSearchParams({
-                    old_password: oldKey, new_password: newKey, accounts: JSON.stringify(updatedAccounts)
+                    old_password: oldKey,
+                    new_password: newKey,
+                    accounts: JSON.stringify(updatedAccounts)
                 })
             });
             const data = await response.json();
             if (!response.ok || !data.success) {
-                // Only an explicit client error confirms that the server rejected the change.
                 if (response.status >= 400 && response.status < 500 && data.success === false) {
                     requestStarted = false;
                     await VaultDB.saveAll(vault.accounts, { ...meta, rotation_pending: false });
@@ -1039,12 +529,16 @@ async function handleSettingsSubmit(event) {
                 }
                 throw new Error('The server could not confirm the key change.');
             }
+
             changed = true;
             if (!VaultDevice.matches(VAULT_OWNER)) return;
             clearVaultKeyCheck();
             let offlineRefreshFailed = false;
             try {
-                const accounts = vault.accounts.map((acc, index) => ({ ...acc, password_encrypted: updatedAccounts[index].password_encrypted }));
+                const accounts = vault.accounts.map((acc, index) => ({
+                    ...acc,
+                    password_encrypted: updatedAccounts[index].password_encrypted
+                }));
                 if (!await VaultDB.saveAll(accounts, { ...meta, synced_at: new Date().toISOString(), rotation_pending: false })) {
                     throw new Error('Offline storage is unavailable');
                 }
@@ -1071,13 +565,13 @@ async function handleSettingsSubmit(event) {
     }
 }
 
-// ── 10. Listeners & Initialization ─────────────────────────
+// ── 6. Listeners & Boot ─────────────────────────────────────
+
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         const overlay = document.getElementById('searchOverlay');
         if (overlay && !overlay.classList.contains('hidden')) { hideSearchOverlay(); return; }
-
-        ['masterKeyModal','accountModal','settingsModal','logoutModal','aboutModal','updateNoticeModal'].forEach(id => {
+        ['masterKeyModal', 'accountModal', 'settingsModal', 'logoutModal', 'aboutModal', 'updateNoticeModal'].forEach(id => {
             const el = document.getElementById(id);
             if (el && !el.classList.contains('hidden')) closeModal(id);
         });
@@ -1088,123 +582,11 @@ document.addEventListener('keydown', e => {
     }
 });
 
-function closeUpdateNotice() {
-    closeModal('updateNoticeModal');
-    localStorage.setItem('seen_update_v1_3_enhanced', 'true');
-    localStorage.setItem('seen_update_v1_3', 'true');
-}
-
-// ── 11. Inactivity Auto-Lock & Privacy Blur Engine ─────────
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const INACTIVITY_WARNING_MS = 30 * 1000;     // 30 seconds warning before lock
-let inactivityTimer = null;
-let inactivityWarningTimer = null;
-let lastActivityReset = 0;
-let isVaultLocked = false;
-
-function initInactivityTracker() {
-    const resetTimer = () => {
-        if (isVaultLocked) return;
-        const now = Date.now();
-        // Throttle activity resets to once per 1000ms
-        if (now - lastActivityReset < 1000) return;
-        lastActivityReset = now;
-
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        if (inactivityWarningTimer) clearTimeout(inactivityWarningTimer);
-
-        // Warning timer at 4.5 minutes (30s before lock)
-        inactivityWarningTimer = setTimeout(() => {
-            if (!isVaultLocked) {
-                showAlert('⚠️ Inactivity Warning: Vault auto-locking in 30s. Move mouse or press any key.', 'warning');
-            }
-        }, INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS);
-
-        // Lock timer at 5 minutes
-        inactivityTimer = setTimeout(() => {
-            triggerInactivityLock();
-        }, INACTIVITY_TIMEOUT_MS);
-    };
-
-    // User interaction events
-    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-    events.forEach(ev => {
-        window.addEventListener(ev, resetTimer, { passive: true });
-    });
-
-    // Start initial timer
-    resetTimer();
-}
-
-function triggerInactivityLock() {
-    if (isVaultLocked) return;
-    if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return; }
-    isVaultLocked = true;
-    clearVaultKeyCheck();
-
-    // 1. Clear any active inactivity timers
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    if (inactivityWarningTimer) clearTimeout(inactivityWarningTimer);
-
-    // 2. Immediately blur all background elements to protect from prying eyes
-    document.body.classList.add('vault-blurred');
-
-    // 3. Clear all visible plaintext passwords on cards immediately
-    document.querySelectorAll('[class*="password-display-"]').forEach(el => {
-        el.textContent = '••••••••••••';
-        el.classList.add('password-masked', 'pw-dots');
-        el.style.color = '';
-        el.style.letterSpacing = '';
-        el.style.fontSize = '';
-    });
-
-    // Clear active password reveal timeouts
-    if (typeof revealTimers === 'object' && revealTimers) {
-        Object.keys(revealTimers).forEach(id => {
-            clearTimeout(revealTimers[id]);
-            delete revealTimers[id];
-        });
-    }
-
-    // 4. Close any open dialogs and wipe in-memory sensitive inputs
-    ['masterKeyModal', 'accountModal', 'settingsModal', 'logoutModal', 'aboutModal', 'updateNoticeModal'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
-
-    const masterPassPrompt = document.getElementById('promptMasterKey');
-    if (masterPassPrompt) masterPassPrompt.value = '';
-    const masterPassModal = document.getElementById('masterPassword');
-    if (masterPassModal) masterPassModal.value = '';
-    const accountPassModal = document.getElementById('accountPassword');
-    if (accountPassModal) accountPassModal.value = '';
-    document.getElementById('settingsForm')?.reset();
-
-    // 5. Display the unblurred Vault Lock Screen
-    const lockOverlay = document.getElementById('vaultLockOverlay');
-    if (lockOverlay) {
-        lockOverlay.classList.remove('hidden');
-    }
-
-    // 6. Asynchronously terminate server session
-    try {
-        if (VaultDevice.matches(VAULT_OWNER)) fetch('api/auth.php?action=logout', { method: 'POST', keepalive: true, headers: { 'X-CSRF-Token': CSRF_TOKEN } }).catch(() => {});
-    } catch (e) {
-        console.warn('Inactivity logout request error:', e);
-    }
-}
-
-// Developer / Automated testing hook
-window.__triggerInactivityLock = triggerInactivityLock;
-
 VaultDevice.subscribe(() => { if (!VaultDevice.matches(VAULT_OWNER)) discardVaultView(); });
 window.addEventListener('focus', () => { if (!VaultDevice.matches(VAULT_OWNER)) discardVaultView(); });
 window.addEventListener('pagehide', () => { discardVaultView(); });
-window.addEventListener('pageshow', event => {
-    if (event.persisted) location.reload();
-});
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 
-// Network status listeners
 window.addEventListener('online', async () => {
     if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return; }
     if (OFFLINE_SHELL) { location.replace('dashboard.php'); return; }
@@ -1218,7 +600,6 @@ window.addEventListener('offline', () => {
     showAlert('🟡 Offline Mode: Your encrypted local vault is active.', 'warning');
 });
 
-// On load initialization
 window.addEventListener('DOMContentLoaded', () => {
     if (!VaultDevice.matches(VAULT_OWNER)) { discardVaultView(); return; }
     updateStatusPill(navigator.onLine);
@@ -1226,11 +607,7 @@ window.addEventListener('DOMContentLoaded', () => {
     syncVaultFromNetwork();
     initInactivityTracker();
 
-    // Show update notice modal on first visit of enhanced release
     if (!localStorage.getItem('seen_update_v1_3_enhanced')) {
-        setTimeout(() => {
-            openModal('updateNoticeModal');
-        }, 500);
+        setTimeout(() => openModal('updateNoticeModal'), 500);
     }
 });
-
