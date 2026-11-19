@@ -1,17 +1,12 @@
-# Contributing to SecureVault
+# Maintainer Notes
 
-1. Fork the repository, create a branch, and follow the local setup in [README.md](README.md).
-2. Keep changes small and explain the problem they solve. Use sample data only.
-3. Read [AGENTS.md](AGENTS.md) for architecture and encryption requirements. Check actual behavior against [SECURITY.md](SECURITY.md); some intended guarantees are not implemented yet.
-4. Run `php -l path/to/changed.php` for each changed PHP file and `php tests/auth-privacy.php`. Check the affected flow in your browser. For vault changes, also verify offline access after an online sync.
-5. Open a pull request describing the change and how you checked it.
+SecureVault is a **personal side project** by Ronan Antoque. It is **not open source** and is not accepting external pull requests or contributions.
 
-Never commit `config.php`, real SQL dumps, passwords, authentication logs, or hosting credentials. Do not change key derivation, salts, or the encrypted data format without a migration that preserves existing vault access.
+## Maintainer Checks
 
-After a repository history cleanup, clone the repository again. Merging or pushing an old clone can restore the removed logs.
+1. Read [AGENTS.md](AGENTS.md) for architecture and encryption requirements, and [SECURITY.md](SECURITY.md) for current guarantees and limitations.
+2. Run `php -l path/to/changed.php` for each changed PHP file and `php tests/auth-privacy.php`. Check the affected flow in the browser, including offline access after an online sync.
+3. Never commit `config.php`, real SQL dumps, passwords, authentication logs, or hosting credentials. Do not change key derivation, salts, or the encrypted data format without a migration that preserves existing vault access.
+4. For authentication, password-change, vault-action, offline-storage, or database-migration changes, run `node tests/master-password-change.cjs` (requires Node.js 22.4+, PHP, MySQL/MariaDB, and Chrome).
 
-GitHub runs the **Checks** workflow on pushes and pull requests. It checks syntax, authentication privacy, login cooldowns, master-key confirmations and changes, offline account isolation, and logout cleanup. Open the pull request's **Checks** tab to see the result and any failure details.
-
-For authentication, password-change, vault-action, offline-storage, or database-migration work, also run `node tests/master-password-change.cjs`. It starts an isolated sample MySQL/MariaDB database, PHP servers, and headless Chrome; it never uses your private configuration or vault. It tests the legacy MyISAM-to-InnoDB upgrade with synthetic data as well as the fresh schema. Defaults target XAMPP and Chrome on Windows, or MySQL 8 and Chrome on Ubuntu. Override `SV_TEST_PHP`, `SV_TEST_MYSQL_BIN`, `SV_TEST_MYSQLD`, or `SV_TEST_CHROME` for other installation paths. Use Node.js 22.4+ for the test's built-in WebSocket client; CI uses Node.js 24 and PHP 8.3.
-
-By contributing your own work, you agree that it is available under the project's [MIT license](LICENSE). Identify any third-party code or assets and preserve their license notices.
+Copyright © 2026 Ronan Antoque. All rights reserved.

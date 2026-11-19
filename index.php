@@ -126,7 +126,7 @@ $userLoggedIn = isLoggedIn() && verifySession();
         details p { padding-bottom: 20px; color: var(--muted); font-size: 14px; }
         .site-footer { border-top: 1px solid var(--line); padding-block: 28px; color: var(--muted); font-size: 12px; }
         .footer-inner { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
-        .footer-links { display: flex; gap: 24px; }
+        .footer-links { display: flex; flex-wrap: wrap; gap: 8px 24px; }
         .official-site { margin-top: 6px; }
         .install-banner { position: fixed; right: 24px; bottom: 24px; z-index: 20; width: min(380px, calc(100% - 48px)); align-items: center; gap: 16px; padding: 20px; border-radius: 12px; background: #19263B; box-shadow: 0 12px 32px #0006; }
         .install-banner p { margin-bottom: 12px; color: #DFE8F6; font-size: 14px; }
@@ -136,6 +136,94 @@ $userLoggedIn = isLoggedIn() && verifySession();
         .dismiss-install svg { width: 20px; height: 20px; }
         .hidden { display: none; }
         .flex { display: flex; }
+        /* Documents: a plain index of notices that open in one shared reading panel. */
+        .docs { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px 64px; margin-top: 24px; padding-top: 48px; border-top: 1px solid var(--line); }
+        .docs-title { margin-bottom: 12px; font-size: 20px; font-weight: 600; line-height: 1.3; letter-spacing: -0.02em; text-wrap: balance; }
+        .docs-intro p { max-width: 36ch; color: var(--muted); font-size: 14px; }
+        .doc-list { margin: 0; padding: 0; list-style: none; }
+        .doc-list li { border-bottom: 1px solid var(--line); }
+        .doc-list li:first-child { border-top: 1px solid var(--line); }
+        .doc-link { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 20px; padding: 20px 8px; }
+        .doc-link:hover { background: linear-gradient(90deg, rgb(0 230 118 / 0.06), transparent 75%); }
+        .doc-icon { display: block; width: 36px; height: 44px; overflow: visible; }
+        .doc-icon path, .doc-icon rect { fill: var(--bg); stroke: #4F7A6A; stroke-width: 1.5; stroke-linejoin: round; }
+        .doc-icon .doc-sheet path { fill: var(--surface); stroke: #86BAA1; }
+        .doc-icon .doc-sheet .doc-lines { fill: none; stroke: #86BAA1; stroke-linecap: round; }
+        .doc-link:is(:hover, :focus-visible) .doc-sheet { transform: translate(-2px, -4px) rotate(-3deg); }
+        .doc-link:is(:hover, :focus-visible) .doc-lines { stroke: var(--green); }
+        .doc-name { display: block; font-size: 15px; font-weight: 600; }
+        .doc-summary { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
+        .doc-meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .doc-arrow { width: 16px; height: 16px; color: var(--muted); }
+        .doc-link:is(:hover, :focus-visible) .doc-arrow { color: var(--green); transform: translateX(3px); }
+        html:has(.doc-reader[open]) { overflow: hidden; }
+        .doc-reader { --doc-enter: translateX(48px); display: none; flex-direction: column; width: min(720px, 100%); max-width: none; height: 100dvh; max-height: none; margin: 0 0 0 auto; padding: 0; border: 0; border-left: 1px solid var(--line); background: var(--surface); color: var(--text); box-shadow: -24px 0 64px rgb(0 0 0 / 0.45); overflow: hidden; opacity: 0; transform: var(--doc-enter); }
+        .doc-reader[open] { display: flex; opacity: 1; transform: none; }
+        .doc-reader::backdrop { background: rgb(4 8 15 / 0); }
+        .doc-reader[open]::backdrop { background: rgb(4 8 15 / 0.72); backdrop-filter: blur(6px); }
+        .doc-progress { position: absolute; inset: 0 0 auto; height: 2px; }
+        .doc-progress span { display: block; height: 100%; background: var(--green); transform: scaleX(var(--doc-progress, 0)); transform-origin: left; }
+        .doc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 32px 40px 16px; }
+        .doc-header h2 { font-size: 24px; }
+        .doc-updated { margin-top: 6px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+        .doc-close { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+        .doc-close:hover { color: var(--green); border-color: var(--green); }
+        .doc-close svg { width: 18px; height: 18px; }
+        .doc-tabs { display: flex; gap: 28px; padding: 0 40px; border-bottom: 1px solid var(--line); }
+        .doc-tabs button { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: inset 0 -2px 0 transparent; }
+        .doc-tabs button:hover { color: var(--text); }
+        .doc-tabs button[aria-pressed="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--green); }
+        .doc-body { flex: 1; min-height: 0; padding: 8px 40px 48px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #34504D transparent; }
+        .doc-body:focus-visible { outline-offset: -4px; }
+        .doc-article { max-width: 62ch; }
+        .doc-lede { margin-top: 24px; }
+        .doc-article h3 { margin: 36px 0 10px; font-size: 16px; }
+        .doc-article p, .doc-article li { color: #C3CDDA; font-size: 15px; line-height: 1.7; }
+        .doc-article .doc-lede { color: var(--text); font-size: 16px; }
+        .doc-article p + p { margin-top: 12px; }
+        .doc-article ul { margin: 10px 0 0; padding-left: 20px; }
+        .doc-article li + li { margin-top: 8px; }
+        .doc-article li::marker { color: var(--green); }
+        .doc-article strong { color: var(--text); font-weight: 600; }
+        .doc-article a, .doc-footer a { color: var(--green); text-decoration: underline; }
+        .doc-glance { margin: 24px 0 0; border-block: 1px solid var(--line); }
+        .doc-glance div { display: grid; grid-template-columns: 12rem 1fr; gap: 16px; padding: 14px 0; }
+        .doc-glance div + div { border-top: 1px solid var(--line); }
+        .doc-glance dt { color: var(--text); font-size: 14px; font-weight: 600; }
+        .doc-glance dd { margin: 0; color: #C3CDDA; font-size: 14px; }
+        .doc-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 40px; border-top: 1px solid var(--line); font-size: 14px; }
+        .doc-next { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
+        .doc-next:hover { color: var(--green); }
+        .doc-next svg { width: 16px; height: 16px; }
+        @media (prefers-reduced-motion: no-preference) {
+            .doc-link { transition: background-color 200ms ease-out; }
+            .doc-sheet { transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1); }
+            .doc-lines, .doc-arrow { transition: stroke 200ms ease-out, color 200ms ease-out, transform 240ms cubic-bezier(0.16, 1, 0.3, 1); }
+            .doc-tabs button { transition: color 200ms ease-out, box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1); }
+            .doc-progress span { transition: transform 80ms linear; }
+            /* Native dialog enter/exit; unsupported browsers simply open and close instantly. */
+            .doc-reader { transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease-out, overlay 460ms allow-discrete, display 460ms allow-discrete; }
+            .doc-reader::backdrop { transition: background-color 360ms ease-out, backdrop-filter 360ms ease-out, overlay 460ms allow-discrete, display 460ms allow-discrete; }
+            @starting-style {
+                .doc-reader[open] { opacity: 0; transform: var(--doc-enter); }
+                .doc-reader[open]::backdrop { background: rgb(4 8 15 / 0); backdrop-filter: blur(0); }
+            }
+        }
+        @media (max-width: 760px) {
+            .docs { grid-template-columns: 1fr; gap: 24px; }
+            .docs-intro p { max-width: none; }
+            .doc-reader { --doc-enter: translateY(48px); width: 100%; height: auto; max-height: 92dvh; margin: auto 0 0; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; }
+            .doc-header { padding: 24px 20px 12px; }
+            .doc-header h2 { font-size: 21px; }
+            .doc-tabs { gap: 24px; padding: 0 20px; }
+            .doc-body { padding: 4px 20px 40px; }
+            .doc-footer { padding: 8px 20px; }
+            .doc-glance div { grid-template-columns: 1fr; gap: 4px; }
+        }
+        @media (max-width: 540px) {
+            .doc-link { grid-template-columns: auto 1fr auto; gap: 16px; padding-inline: 0; }
+            .doc-meta { display: none; }
+        }
         /* One shared timeline: mask the sample, move the card, then close the vault. */
         /* Without JavaScript or with reduced motion, the masked card and closed vault stay visible. */
         @media (prefers-reduced-motion: no-preference) {
@@ -413,6 +501,40 @@ $userLoggedIn = isLoggedIn() && verifySession();
                 </svg>
             </figure>
             <p class="privacy-status"><strong>Current limitation.</strong> The server still receives your master password when you sign in. The full zero-knowledge design is still being improved.</p>
+
+            <!-- Each row opens the shared reader below; the #doc-* links are also shareable. -->
+            <div id="documents" class="docs">
+                <div class="docs-intro" data-scroll-reveal>
+                    <h3 class="docs-title">The fine print, in plain language.</h3>
+                    <p>What SecureVault stores, the rules for using it, and how your passwords are protected.</p>
+                </div>
+                <ul class="doc-list">
+                    <li data-scroll-reveal="faq">
+                        <a class="doc-link" href="#doc-privacy" data-doc-open="privacy">
+                            <svg class="doc-icon" viewBox="0 0 36 44" aria-hidden="true" focusable="false"><rect x="10" y="2" width="24" height="32" rx="3"/><g class="doc-sheet"><path d="M5 8h15l8 8v24a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z"/><path class="doc-lines" d="M20 8v8h8M8 25h14M8 30h14M8 35h9"/></g></svg>
+                            <span><span class="doc-name">Privacy Policy</span><span class="doc-summary">What is stored, where it lives, and for how long.</span></span>
+                            <span class="doc-meta">4 min read</span>
+                            <svg class="doc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                    </li>
+                    <li data-scroll-reveal="faq" data-reveal-delay="80">
+                        <a class="doc-link" href="#doc-terms" data-doc-open="terms">
+                            <svg class="doc-icon" viewBox="0 0 36 44" aria-hidden="true" focusable="false"><rect x="10" y="2" width="24" height="32" rx="3"/><g class="doc-sheet"><path d="M5 8h15l8 8v24a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z"/><path class="doc-lines" d="M20 8v8h8M8 25h14M8 30h14M8 35h9"/></g></svg>
+                            <span><span class="doc-name">Terms of Use</span><span class="doc-summary">The ground rules for using a personal side project.</span></span>
+                            <span class="doc-meta">3 min read</span>
+                            <svg class="doc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                    </li>
+                    <li data-scroll-reveal="faq" data-reveal-delay="160">
+                        <a class="doc-link" href="#doc-security" data-doc-open="security">
+                            <svg class="doc-icon" viewBox="0 0 36 44" aria-hidden="true" focusable="false"><rect x="10" y="2" width="24" height="32" rx="3"/><g class="doc-sheet"><path d="M5 8h15l8 8v24a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z"/><path class="doc-lines" d="M20 8v8h8M8 25h14M8 30h14M8 35h9"/></g></svg>
+                            <span><span class="doc-name">Security Overview</span><span class="doc-summary">How encryption works, and what it does not cover yet.</span></span>
+                            <span class="doc-meta">3 min read</span>
+                            <svg class="doc-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </section>
 
         <section class="faq" aria-labelledby="faq-title">
@@ -440,16 +562,149 @@ $userLoggedIn = isLoggedIn() && verifySession();
     <footer class="site-footer">
         <div class="container footer-inner" data-scroll-reveal>
             <div>
-                <p>SecureVault · Made by Ronan Antoque</p>
+                <p>SecureVault · A personal side project by Ronan Antoque</p>
                 <p class="official-site">Before signing in, check the address: securevault.great-site.net</p>
             </div>
             <div class="footer-links">
                 <a class="quiet-link" href="#how-it-works">How it works</a>
-                <a class="quiet-link" href="#data-privacy">Data privacy</a>
-                <a class="quiet-link" href="https://github.com/RonanStack24/SecureVault" target="_blank" rel="noopener noreferrer">Source code</a>
+                <a class="quiet-link" href="#doc-privacy" data-doc-open="privacy">Privacy</a>
+                <a class="quiet-link" href="#doc-terms" data-doc-open="terms">Terms</a>
+                <a class="quiet-link" href="#doc-security" data-doc-open="security">Security</a>
             </div>
         </div>
     </footer>
+
+    <!-- One reader for all documents. Copy must match actual behavior; update the date when it changes. -->
+    <dialog id="docReader" class="doc-reader" aria-labelledby="docReaderTitle" closedby="any">
+        <div class="doc-progress" aria-hidden="true"><span></span></div>
+        <header class="doc-header">
+            <div>
+                <h2 id="docReaderTitle">Privacy Policy</h2>
+                <p class="doc-updated">Updated 19 November 2026 · <span data-doc-time>4 min read</span></p>
+            </div>
+            <button class="doc-close" type="button" data-doc-close aria-label="Close document">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="m6 6 12 12M6 18 18 6"/></svg>
+            </button>
+        </header>
+        <nav class="doc-tabs" aria-label="SecureVault documents">
+            <button type="button" data-doc-tab="privacy" aria-pressed="true">Privacy</button>
+            <button type="button" data-doc-tab="terms" aria-pressed="false">Terms</button>
+            <button type="button" data-doc-tab="security" aria-pressed="false">Security</button>
+        </nav>
+        <div class="doc-body" tabindex="0" aria-label="Document text">
+            <article class="doc-article" data-doc="privacy" data-title="Privacy Policy" data-time="4 min read">
+                <p class="doc-lede">SecureVault is a personal side project built and run by Ronan Antoque. This policy explains what the service at securevault.great-site.net stores, where, and why.</p>
+                <dl class="doc-glance">
+                    <div><dt>Encrypted in your browser</dt><dd>The passwords you save in your vault.</dd></div>
+                    <div><dt>Stored without that encryption</dt><dd>Your username and email, and each entry’s service name, login name, website, notes, and category.</dd></div>
+                    <div><dt>Never</dt><dd>Sold, used for advertising, or tracked with analytics.</dd></div>
+                </dl>
+
+                <h3>What is stored on the server</h3>
+                <ul>
+                    <li><strong>Account details:</strong> your username, email address, a bcrypt hash of your master key (not the key itself), and a random salt used to derive your encryption key.</li>
+                    <li><strong>Vault entries:</strong> the service name, login name, website, notes, and category you enter. The password itself is stored only as AES-256-GCM ciphertext created in your browser.</li>
+                    <li><strong>Sessions:</strong> a random sign-in token and its expiry time, so you stay signed in.</li>
+                    <li><strong>Sign-in protection:</strong> counts of failed sign-in attempts, labeled by a hash of the account or network address rather than the name or address itself. They expire after 15 minutes.</li>
+                </ul>
+
+                <h3>Your master key</h3>
+                <p>Your master key is sent over HTTPS when you create an account, sign in, or change it, so the server can check it against its bcrypt hash. It is not saved in readable form or written to logs.</p>
+                <p>Saved passwords are encrypted and decrypted only in your browser. Because the server receives your master key at sign-in, SecureVault is not yet fully zero-knowledge.</p>
+
+                <h3>What stays on your device</h3>
+                <p>To open your vault without a connection, this browser keeps:</p>
+                <ul>
+                    <li>an encrypted copy of your vault and its entry details in browser storage (IndexedDB);</li>
+                    <li>an encrypted check that confirms your master key before changes, and a note of which account is signed in;</li>
+                    <li>a session cookie and a sign-out cookie, needed to sign in and out;</li>
+                    <li>cached public pages, so the app can start offline.</li>
+                </ul>
+                <p>Signing out removes the vault copy, its details, and the key check. The inactivity lock keeps the encrypted copy for offline access. There are no advertising or tracking cookies.</p>
+
+                <h3>Services involved</h3>
+                <p>SecureVault is hosted on InfinityFree. Its servers hold the database and may keep standard technical logs, such as IP addresses and request times.</p>
+                <p>Pages load fonts from Google Fonts, and the sign-in and vault pages load styles from the Tailwind CSS CDN. Those providers receive your IP address and browser details when your browser requests the files. Your data is not shared with anyone else.</p>
+
+                <h3>How long data is kept</h3>
+                <p>Your account and entries stay until they are deleted. Deleting an entry removes it from the server and from this browser’s copy. Expired sign-in counters are removed automatically.</p>
+                <p>There is no self-service account deletion yet. To delete your account and all of its entries, contact Ronan.</p>
+
+                <h3>Your choices</h3>
+                <p>You can view, edit, and delete your entries at any time, sign out to clear this browser’s copy, and ask Ronan about or request deletion of your account data.</p>
+
+                <h3>Changes and contact</h3>
+                <p>If this policy changes, the date at the top changes too. Questions? Contact Ronan through his <a href="https://github.com/RonanStack24" target="_blank" rel="noopener noreferrer">GitHub profile</a>.</p>
+            </article>
+
+            <article class="doc-article" data-doc="terms" data-title="Terms of Use" data-time="3 min read" hidden>
+                <p class="doc-lede">SecureVault is a free, personal side project by Ronan Antoque. It is experimental and has not had an independent security audit. By creating an account or using SecureVault, you agree to these terms.</p>
+
+                <h3>Your account and master key</h3>
+                <p>Keep your master key private and memorable. There is no reset: if you forget it, your saved passwords cannot be decrypted by anyone, including the developer.</p>
+                <p>You are responsible for activity under your account. Sign out when you use a shared device.</p>
+
+                <h3>Keep your own backup</h3>
+                <p>SecureVault has no export feature yet, and the service may be unavailable, changed, or discontinued at any time. Keep a separate copy of any password you cannot afford to lose.</p>
+
+                <h3>Acceptable use</h3>
+                <p>Please do not:</p>
+                <ul>
+                    <li>try to access other people’s accounts or data;</li>
+                    <li>probe, scan, or attack the service or its hosting;</li>
+                    <li>send automated or excessive requests, including repeated sign-in attempts;</li>
+                    <li>use SecureVault for anything unlawful.</li>
+                </ul>
+                <p>Accounts that break these rules may be suspended or removed.</p>
+
+                <h3>Ownership</h3>
+                <p>SecureVault’s code, design, name, and logo belong to Ronan Antoque. SecureVault is not open source: please do not copy, modify, redistribute, or host it without written permission. Everything you save in your vault remains yours.</p>
+
+                <h3>No warranty</h3>
+                <p>SecureVault is provided “as is” and “as available”, without warranties of any kind. To the extent the law allows, Ronan Antoque is not liable for lost data, lost access, or other damages from using or being unable to use the service.</p>
+
+                <h3>Changes</h3>
+                <p>These terms may be updated; the date at the top shows the current version. Continuing to use SecureVault after a change means you accept the updated terms.</p>
+            </article>
+
+            <article class="doc-article" data-doc="security" data-title="Security Overview" data-time="3 min read" hidden>
+                <p class="doc-lede">A plain summary of how SecureVault protects your saved passwords, and where those protections stop.</p>
+
+                <h3>How saved passwords are protected</h3>
+                <p>When you save a password, your browser derives a 256-bit key from your master key and your account’s salt using PBKDF2-SHA256 with 100,000 iterations. It then encrypts the password with AES-256-GCM and a fresh random 12-byte IV. Only the ciphertext leaves your device.</p>
+                <p>Revealing a password reverses this in your browser. The plain text hides again after 30 seconds.</p>
+
+                <h3>Built-in safeguards</h3>
+                <ul>
+                    <li>HTTPS on the live site.</li>
+                    <li>Your master key is stored only as a bcrypt hash.</li>
+                    <li>Sign-in pauses for 15 minutes after 5 failed attempts on an account, or 25 from one network address.</li>
+                    <li>Saving or deleting entries requires your session’s anti-forgery token and a local check of your master key.</li>
+                    <li>The vault locks after 5 minutes of inactivity, and signing out clears this browser’s copy.</li>
+                    <li>Changing your master key re-encrypts every entry together and signs out all sessions.</li>
+                </ul>
+
+                <h3>Known limitations</h3>
+                <ul>
+                    <li>The server receives your master key when you sign in, so SecureVault is not yet fully zero-knowledge.</li>
+                    <li>Entry details other than the password are not encrypted.</li>
+                    <li>There has been no independent security audit.</li>
+                    <li>Browser extensions, malicious scripts, or anyone with access to your browser profile can get around browser-side protections.</li>
+                    <li>Other devices keep their offline copies until they sign in online again or sign out.</li>
+                </ul>
+
+                <h3>Reporting a problem</h3>
+                <p>If you find a security issue, contact Ronan privately through his <a href="https://github.com/RonanStack24" target="_blank" rel="noopener noreferrer">GitHub profile</a>. Please do not post passwords, vault contents, or exploit details publicly.</p>
+            </article>
+        </div>
+        <footer class="doc-footer">
+            <a href="https://github.com/RonanStack24" target="_blank" rel="noopener noreferrer">Contact Ronan</a>
+            <button class="doc-next" type="button" data-doc-next>
+                <span>Next: <span data-doc-next-label>Terms of Use</span></span>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+            </button>
+        </footer>
+    </dialog>
 
     <!-- Keep the shared PWA install hooks available when the browser offers installation. -->
     <aside id="installBanner" class="install-banner hidden" aria-label="Install SecureVault">
@@ -553,6 +808,56 @@ $userLoggedIn = isLoggedIn() && verifySession();
             reducedMotion.addEventListener('change', updateMotion);
             document.addEventListener('visibilitychange', updateMotion);
             updateMotion();
+        })();
+    </script>
+    <script>
+        // Document reader: one native dialog, switchable articles, and shareable #doc-* links.
+        (() => {
+            const reader = document.getElementById('docReader');
+            if (!reader || typeof reader.showModal !== 'function') return;
+            const body = reader.querySelector('.doc-body');
+            const articles = [...reader.querySelectorAll('[data-doc]')];
+            const order = articles.map(article => article.dataset.doc);
+            const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+            const updateProgress = () => {
+                const max = body.scrollHeight - body.clientHeight;
+                reader.style.setProperty('--doc-progress', max > 0 ? String(body.scrollTop / max) : '1');
+            };
+            const show = (key, animate) => {
+                const article = articles.find(item => item.dataset.doc === key) || articles[0];
+                const next = articles[(articles.indexOf(article) + 1) % articles.length];
+                articles.forEach(item => { item.hidden = item !== article; });
+                reader.querySelector('#docReaderTitle').textContent = article.dataset.title;
+                reader.querySelector('[data-doc-time]').textContent = article.dataset.time;
+                reader.querySelector('[data-doc-next-label]').textContent = next.dataset.title;
+                reader.querySelector('[data-doc-next]').dataset.target = next.dataset.doc;
+                reader.querySelectorAll('[data-doc-tab]').forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.docTab === article.dataset.doc)));
+                body.scrollTop = 0;
+                updateProgress();
+                history.replaceState(null, '', '#doc-' + article.dataset.doc);
+                if (animate && !reducedMotion.matches && article.animate) {
+                    article.animate([{ opacity: 0.3, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+                }
+            };
+            const open = key => {
+                show(key, reader.open);
+                if (!reader.open) reader.showModal();
+            };
+
+            document.querySelectorAll('[data-doc-open]').forEach(link => link.addEventListener('click', event => {
+                event.preventDefault();
+                open(link.dataset.docOpen);
+            }));
+            reader.querySelectorAll('[data-doc-tab]').forEach(tab => tab.addEventListener('click', () => show(tab.dataset.docTab, true)));
+            reader.querySelector('[data-doc-next]').addEventListener('click', event => show(event.currentTarget.dataset.target, true));
+            reader.querySelector('[data-doc-close]').addEventListener('click', () => reader.close());
+            // Backdrop clicks target the dialog itself; its contents fill the panel. closedby="any" covers newer browsers.
+            reader.addEventListener('click', event => { if (event.target === reader) reader.close(); });
+            reader.addEventListener('close', () => history.replaceState(null, '', location.pathname + location.search));
+            body.addEventListener('scroll', updateProgress, { passive: true });
+
+            const linked = location.hash.match(/^#doc-(privacy|terms|security)$/);
+            if (linked && order.includes(linked[1])) open(linked[1]);
         })();
     </script>
     <script src="js/pwa.js"></script>

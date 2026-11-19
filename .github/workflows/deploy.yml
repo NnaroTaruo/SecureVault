@@ -1,0 +1,113 @@
+name: Deploy to InfinityFree
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-infinityfree
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Verify and deploy to InfinityFree (htdocs)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@d52fc211a0436f8839a587b3b5b8efddab4744ea # v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, openssl
+          coverage: none
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Check PHP syntax
+        run: git ls-files -z -- '*.php' | xargs -0 -r -n 1 php -l
+
+      - name: Check JavaScript syntax
+        run: git ls-files -z -- '*.js' '*.cjs' '*.mjs' | xargs -0 -r -n 1 node --check
+
+      - name: Check authentication privacy
+        run: php tests/auth-privacy.php
+
+      - name: Stage production files only
+        run: |
+          STAGE_DIR="$(mktemp -d)"
+          echo "STAGE_DIR=$STAGE_DIR" >> "$GITHUB_ENV"
+
+          # Copy only public runtime files; never stage config.php, SQL dumps, migrations, or tests.
+          cp -p \
+            .htaccess \
+            accounts.php \
+            auth.php \
+            dashboard.php \
+            db.php \
+            functions.php \
+            icon-192.png \
+            icon-512.png \
+            index.php \
+            LICENSE \
+            login.php \
+            logo.svg \
+            maintenance.php \
+            manifest.json \
+            ronan.jpg \
+            securevault-infographic.png \
+            service-worker.js \
+            "$STAGE_DIR/"
+
+          cp -rp api assets css js "$STAGE_DIR/"
+
+          # Guardrail: fail immediately if any sensitive file ever entered staging.
+          if [ -e "$STAGE_DIR/config.php" ] || compgen -G "$STAGE_DIR/*.sql" > /dev/null; then
+            echo "::error::Sensitive config or SQL file detected in staging directory."
+            exit 1
+          fi
+
+      - name: Upload staged files to InfinityFree via FTP
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER || 'ftpupload.net' }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PORT: ${{ secrets.FTP_PORT || '21' }}
+          FTP_TARGET_DIR: ${{ secrets.FTP_TARGET_DIR || '/htdocs' }}
+        run: |
+          if [ -z "$FTP_USERNAME" ] || [ -z "$FTP_PASSWORD" ]; then
+            echo "::error::Missing FTP_USERNAME or FTP_PASSWORD in GitHub Actions Secrets."
+            exit 1
+          fi
+
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+          lftp -c "
+            set ftp:ssl-allow yes;
+            set ftp:ssl-protect-data yes;
+            set ssl:verify-certificate no;
+            set ftp:passive-mode on;
+            set net:timeout 20;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 5;
+            open -u \"$FTP_USERNAME\",\"$FTP_PASSWORD\" -p \"$FTP_PORT\" \"$FTP_SERVER\";
+            mirror --reverse --verbose --no-perms \
+              --exclude-glob config.php \
+              --exclude-glob '*.sql' \
+              --exclude-glob '*.log' \
+              \"$STAGE_DIR\" \"$FTP_TARGET_DIR\";
+            bye
+          "
