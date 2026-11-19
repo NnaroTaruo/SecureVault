@@ -634,7 +634,7 @@ $userLoggedIn = isLoggedIn() && verifySession();
                 <p>You can view, edit, and delete your entries at any time, sign out to clear this browser’s copy, and ask Ronan about or request deletion of your account data.</p>
 
                 <h3>Changes and contact</h3>
-                <p>If this policy changes, the date at the top changes too. Questions? Contact Ronan through his <a href="https://github.com/RonanStack24" target="_blank" rel="noopener noreferrer">GitHub profile</a>.</p>
+                <p>If this policy changes, the date at the top changes too. Questions? Contact Ronan through his <a href="https://github.com/NnaroTaruo" target="_blank" rel="noopener noreferrer">GitHub profile</a>.</p>
             </article>
 
             <article class="doc-article" data-doc="terms" data-title="Terms of Use" data-time="3 min read" hidden>
@@ -694,11 +694,11 @@ $userLoggedIn = isLoggedIn() && verifySession();
                 </ul>
 
                 <h3>Reporting a problem</h3>
-                <p>If you find a security issue, contact Ronan privately through his <a href="https://github.com/RonanStack24" target="_blank" rel="noopener noreferrer">GitHub profile</a>. Please do not post passwords, vault contents, or exploit details publicly.</p>
+                <p>If you find a security issue, contact Ronan privately through his <a href="https://github.com/NnaroTaruo" target="_blank" rel="noopener noreferrer">GitHub profile</a>. Please do not post passwords, vault contents, or exploit details publicly.</p>
             </article>
         </div>
         <footer class="doc-footer">
-            <a href="https://github.com/RonanStack24" target="_blank" rel="noopener noreferrer">Contact Ronan</a>
+            <a href="https://github.com/NnaroTaruo" target="_blank" rel="noopener noreferrer">Contact Ronan</a>
             <button class="doc-next" type="button" data-doc-next>
                 <span>Next: <span data-doc-next-label>Terms of Use</span></span>
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>

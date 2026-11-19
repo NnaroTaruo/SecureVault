@@ -6,7 +6,7 @@
 
 ## 1. Project Identity & Purpose
 * **Project Name**: SecureVault (v1.3 PWA Edition)
-* **Founder & Developer**: Ronan Antoque ([@RonanStack24](https://github.com/RonanStack24))
+* **Founder & Developer**: Ronan Antoque ([@NnaroTaruo](https://github.com/NnaroTaruo))
 * **Live Deployment**: `https://securevault.great-site.net/` (InfinityFree)
 * **Core Philosophy**: A personal, zero-knowledge, client-side encrypted password manager and installable Progressive Web App (PWA).
 
